@@ -256,9 +256,10 @@
     el.modeSelect.value = state.settings.mode;
 
     // Badges
-    el.roundBadge.textContent = `Runde: ${state.rounds.length}`;
+    const currentRound = state.rounds.length + 1;
+    el.roundBadge.textContent = `Runde: ${currentRound}`;
     const orb = document.getElementById('orbRound');
-    if (orb) orb.textContent = String(state.rounds.length);
+    if (orb) orb.textContent = String(currentRound);
 
     const hs = currentHandSize();
     el.handBadge.textContent = `Hand: ${hs ? hs : "–"}`;

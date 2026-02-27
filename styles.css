@@ -863,3 +863,111 @@ body::before{
   padding-bottom:14px;
 }
 
+
+
+/* --- Responsive: phone / tablet / desktop --- */
+@media (max-width: 900px){
+  :root{ --contentMax: 940px; }
+  #playersContainer{
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  }
+}
+
+@media (max-width: 720px){
+  #titleRow{
+    flex-wrap:wrap;
+    justify-content:center !important;
+    gap:12px;
+  }
+  .titleActions{
+    width:100%;
+    display:flex;
+    justify-content:center;
+    gap:10px;
+  }
+  #summaryStrip, #leaderLine, #subLine{
+    justify-content:center;
+  }
+  #setupRow{
+    display:grid;
+    grid-template-columns: 1fr;
+    gap:10px;
+    align-items:stretch;
+  }
+  .setupItem{ min-width: unset; }
+  #playersContainer{
+    grid-template-columns: 1fr;
+    gap:12px;
+    padding-bottom: 120px;
+  }
+  #bottomBar{
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+}
+
+@media (min-width: 721px) and (max-width: 1100px){
+  #setupRow{
+    display:grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap:10px;
+  }
+}
+
+
+/* --- Desktop layout fix: avoid narrow centered column --- */
+
+/* Override earlier "contentMax padding" logic; use max-width containers instead */
+#topbar, #setupRow, #emptyState, #playersContainer{
+  padding-left: 14px !important;
+  padding-right: 14px !important;
+  max-width: 1240px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Bottom bar spans full width, button constrained */
+#bottomBar{
+  padding-left: 14px !important;
+  padding-right: 14px !important;
+}
+#saveRoundBtn{
+  max-width: 1240px;
+  margin-left: auto;
+  margin-right: auto;
+  display:block;
+}
+
+/* Desktop header: left brand, right actions */
+@media (min-width: 900px){
+  #topbar{ text-align:left; }
+  #titleRow{
+    justify-content: space-between !important;
+  }
+  .titleText{
+    align-items:flex-start;
+  }
+  #summaryStrip, #leaderLine, #subLine{
+    justify-content:flex-start;
+    text-align:left;
+  }
+}
+
+/* Desktop setup row should be horizontal */
+@media (min-width: 900px){
+  #setupRow{
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    align-items:flex-end;
+  }
+  .setupItem{ flex: 1 1 240px; }
+}
+
+/* Desktop cards: ensure multi-column grid */
+@media (min-width: 900px){
+  #playersContainer{
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    gap: 14px;
+  }
+}
