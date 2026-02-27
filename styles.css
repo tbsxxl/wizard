@@ -107,44 +107,11 @@ body::before{
 .titleActions{display:flex;gap:8px;align-items:center}
 
 /* Sigil: wand + 4 suit pips */
-.sigil{
-  width:44px;height:44px;
-  border-radius:16px;
-  position:relative;
-  flex:0 0 auto;
-}
-.sigilGlass{
-  position:absolute; inset:0;
-  border-radius:16px;
-  background:
-    radial-gradient(18px 18px at 25% 20%, rgba(67,215,255,.35), transparent 60%),
-    radial-gradient(18px 18px at 70% 75%, rgba(243,74,74,.30), transparent 60%),
-    linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.04));
-  border:1px solid rgba(255,255,255,.16);
-  box-shadow: 0 16px 44px rgba(0,0,0,.40);
-}
-.sigilWand{
-  position:absolute;
-  left:10px; top:30px;
-  width:26px; height:3px;
-  border-radius:999px;
-  transform: rotate(-35deg);
-  background: linear-gradient(90deg, rgba(255,255,255,.85), rgba(255,255,255,.18));
-  box-shadow: 0 0 18px rgba(67,215,255,.16);
-}
-.sigilWand::after{
-  content:"";
-  position:absolute;
-  right:-4px; top:50%;
-  width:10px; height:10px;
-  transform: translateY(-50%) rotate(45deg);
-  border-radius:4px;
-  background: radial-gradient(circle at 30% 30%, rgba(255,255,255,.95), rgba(255,255,255,.20));
-  box-shadow: 0 0 22px rgba(243,74,74,.20);
-}
-.sigilPips{
-  position:absolute; inset:0;
-}
+
+
+
+
+
 .pip{
   position:absolute;
   width:8px;height:8px;border-radius:999px;
@@ -157,14 +124,7 @@ body::before{
 .p3{left:7px; bottom:7px; background: color-mix(in srgb, var(--sBlue) 70%, transparent); }
 .p4{right:7px; bottom:7px; background: color-mix(in srgb, var(--sGold) 70%, transparent); }
 
-.sigilRune{
-  position:absolute; inset:0;
-  display:grid; place-items:center;
-  font-weight:850;
-  letter-spacing:-.6px;
-  color: rgba(255,255,255,.90);
-  text-shadow: 0 0 20px rgba(67,215,255,.18);
-}
+
 
 /* suit strip under title */
 .suitStrip{
@@ -658,7 +618,6 @@ select:focus, input:focus{
   transition: all .2s ease;
 }
 
-
 /* --- Round Orb (Wizard identity) --- */
 .roundOrbMini{
   width:56px;
@@ -705,3 +664,202 @@ select:focus, input:focus{
   .roundOrbMini{width:50px;height:50px}
   .roundOrbMini .orbNum{font-size:16px}
 }
+
+
+/* --- Layout polish (desktop + readability) --- */
+:root{
+  --contentMax: 1220px;
+}
+
+/* Center content blocks on large screens */
+#topbar, #setupRow, #emptyState, #playersContainer, #bottomBar{
+  padding-left: max(14px, calc((100vw - var(--contentMax)) / 2));
+  padding-right: max(14px, calc((100vw - var(--contentMax)) / 2));
+}
+
+/* Reduce header visual noise and align better */
+#titleRow{
+  align-items:center;
+  margin-bottom:8px;
+}
+.titleText{min-width: 320px}
+.suitStrip{opacity:.9}
+
+/* Make topbar feel less tall */
+#topbar{
+  padding-top: calc(8px + var(--safeT));
+  padding-bottom: 10px;
+}
+
+/* Player grid: nicer density on desktop */
+#playersContainer{
+  padding-top: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 14px;
+}
+
+/* Setup cards: slightly tighter */
+#setupRow{padding-top: 10px; padding-bottom: 10px}
+.setupItem{min-width: 200px}
+
+/* Cards: crisper contrast + less empty space */
+.playerCard{
+  padding: 14px;
+}
+.pInputs{gap:12px}
+.field{padding:12px}
+.field input{
+  background: rgba(255,255,255,.04);
+  border:1px solid rgba(255,255,255,.12);
+}
+.field input:focus{
+  border-color: rgba(67,215,255,.55);
+  box-shadow: 0 0 0 4px rgba(67,215,255,.14);
+}
+
+/* Improve numbers/labels hierarchy */
+.pName{font-size:16px}
+.pTotal{font-size:12.5px; letter-spacing:.1px}
+.pRoundScore .rsValue{font-size:16px}
+
+/* Rank badge: smaller and subtler */
+.pTop .badge{
+  padding:5px 9px;
+  font-size:11px;
+  background: rgba(7,10,18,.55);
+}
+
+/* Round badges: slightly smaller */
+.badge{padding:5px 9px; font-size:11px}
+
+/* Reduce intense hover movement (optional) */
+.playerCard:hover{
+  transform:none;
+}
+
+/* Orb: slightly tighter */
+.roundOrbMini{margin-right:10px}
+
+
+/* --- Global Layout Refinement --- */
+
+/* Hide any leftover sigil rune (floating W) */
+
+
+/* Center entire header content better */
+#topbar{
+  text-align:left;
+}
+
+/* Make header more compact and reduce vertical emptiness */
+#titleRow{
+  justify-content:flex-start;
+  gap:14px;
+}
+
+/* Constrain main content width + better vertical rhythm */
+#setupRow, #playersContainer{
+  max-width:1100px;
+  margin: 0 auto;
+}
+
+/* Reduce large empty top spacing */
+#playersContainer{
+  padding-top: 18px;
+}
+
+/* Make setup row feel like a proper section */
+#setupRow{
+  margin-top: 8px;
+  margin-bottom: 12px;
+}
+
+/* Improve visual balance between setup + cards */
+.setupItem{
+  background: rgba(255,255,255,.03);
+  border:1px solid rgba(255,255,255,.08);
+}
+
+/* Cleaner player cards */
+.playerCard{
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: box-shadow .2s ease;
+}
+
+.playerCard:hover{
+  box-shadow: 0 0 40px rgba(67,215,255,.10);
+}
+
+/* Improve spacing inside cards */
+.pInputs{
+  gap:14px;
+}
+
+.field{
+  background: rgba(255,255,255,.035);
+}
+
+.pRoundScore{
+  margin-top:14px;
+}
+
+/* Make preview number visually clearer */
+.pRoundScore .rsValue{
+  font-weight:800;
+}
+
+/* Reduce visual clutter from background patterns */
+body::before{
+  opacity:.12 !important;
+}
+
+
+/* --- Centered Header Layout --- */
+
+#topbar{
+  text-align:center;
+}
+
+#titleRow{
+  justify-content:center !important;
+  align-items:center;
+  gap:18px;
+}
+
+.roundOrbMini{
+  margin-right:0;
+}
+
+.titleText{
+  align-items:center;
+}
+
+.brandTitle{
+  font-size:20px;
+}
+
+.subtitle{
+  font-size:12px;
+  opacity:.85;
+}
+
+/* Center summary badges cleanly below title */
+#summaryStrip{
+  justify-content:center;
+  text-align:center;
+}
+
+#leaderLine{
+  justify-content:center;
+}
+
+#subLine{
+  justify-content:center;
+}
+
+/* Improve vertical rhythm */
+#topbar{
+  padding-bottom:14px;
+}
+

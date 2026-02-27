@@ -256,7 +256,7 @@
     el.modeSelect.value = state.settings.mode;
 
     // Badges
-    el\.roundBadge\.textContent = `Runde: \$\{state\.rounds\.length\}`;
+    el.roundBadge.textContent = `Runde: ${state.rounds.length}`;
     const orb = document.getElementById('orbRound');
     if (orb) orb.textContent = String(state.rounds.length);
 
