@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Wizard – Score Tracker</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+
+  <header class="hero">
+    <div class="heroLeft">
+      <div class="roundOrb">
+        <span id="roundNumber">0</span>
+        <div class="roundLabel">Runde</div>
+      </div>
+      <div>
+        <h1 class="brand">Wizard</h1>
+        <div class="sub">Stichspiel · Präzise Ansagen · Wahrscheinlichkeiten</div>
+      </div>
+    </div>
+
+    <div class="heroRight">
+      <div class="trumpBox">
+        <div class="trumpLabel">Trumpf</div>
+        <div class="trumpColors">
+          <span class="t red"></span>
+          <span class="t green"></span>
+          <span class="t blue"></span>
+          <span class="t gold"></span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div id="playersContainer"></div>
+  </main>
+
+  <script src="./app.js"></script>
+</body>
+</html>

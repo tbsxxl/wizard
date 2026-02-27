@@ -1,0 +1,155 @@
+
+:root{
+  --bg:#060912;
+  --bg2:#0b1328;
+
+  --red:#f34a4a;
+  --green:#34d399;
+  --blue:#43d7ff;
+  --gold:#ffd56a;
+
+  --text:#eef2ff;
+  --sub:#9aa7c7;
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family: ui-sans-serif, system-ui;
+  background: radial-gradient(1200px 600px at 30% -20%, #13204a 0%, transparent 60%), var(--bg);
+  color:var(--text);
+}
+
+/* HERO */
+.hero{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:40px 40px 20px;
+}
+
+.heroLeft{
+  display:flex;
+  gap:24px;
+  align-items:center;
+}
+
+.brand{
+  font-family: Georgia, serif;
+  font-size:34px;
+  letter-spacing:1px;
+  margin:0;
+}
+
+.sub{
+  color:var(--sub);
+  font-size:13px;
+}
+
+.roundOrb{
+  width:90px;
+  height:90px;
+  border-radius:50%;
+  background: radial-gradient(circle at 30% 30%, var(--blue), var(--red));
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  box-shadow: 0 0 40px rgba(67,215,255,.3);
+}
+
+.roundOrb span{
+  font-size:28px;
+  font-weight:700;
+}
+
+.roundLabel{
+  font-size:11px;
+  opacity:.8;
+}
+
+.trumpBox{
+  text-align:right;
+}
+
+.trumpLabel{
+  font-size:12px;
+  color:var(--sub);
+  margin-bottom:6px;
+}
+
+.trumpColors{
+  display:flex;
+  gap:6px;
+  justify-content:flex-end;
+}
+
+.t{
+  width:16px;
+  height:16px;
+  border-radius:4px;
+}
+
+.red{background:var(--red)}
+.green{background:var(--green)}
+.blue{background:var(--blue)}
+.gold{background:var(--gold)}
+
+/* PLAYER GRID */
+main{
+  padding:20px 40px 80px;
+}
+
+#playersContainer{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+  gap:18px;
+}
+
+.playerCard{
+  background:linear-gradient(180deg, #0f1a3a, #0a1226);
+  border-radius:18px;
+  padding:18px;
+  box-shadow: 0 20px 50px rgba(0,0,0,.4);
+  position:relative;
+}
+
+.playerCard::before{
+  content:"";
+  position:absolute;
+  top:0;left:0;right:0;
+  height:4px;
+  border-radius:18px 18px 0 0;
+  background:linear-gradient(90deg,var(--red),var(--green),var(--blue),var(--gold));
+}
+
+.pName{
+  font-weight:700;
+  margin-bottom:4px;
+}
+
+.pTotal{
+  font-size:13px;
+  color:var(--sub);
+  margin-bottom:12px;
+}
+
+.field{
+  margin-bottom:12px;
+}
+
+.field label{
+  display:block;
+  font-size:12px;
+  color:var(--sub);
+  margin-bottom:4px;
+}
+
+.field input{
+  width:100%;
+  padding:10px;
+  border-radius:10px;
+  border:none;
+  background:#0b1328;
+  color:white;
+}
