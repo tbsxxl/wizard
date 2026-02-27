@@ -10,6 +10,8 @@
 
   // Elements
   const el = {
+    scoreBtn: document.getElementById('scoreBtn'),
+    scoreboardPanel: document.getElementById('scoreboardPanel'),
     empty: byId("emptyState"),
     players: byId("playersContainer"),
     roundBadge: byId("roundBadge"),
@@ -107,6 +109,25 @@
   });
 
   el.historyBtn.addEventListener("click", () => toggleHistory());
+  function toggleScoreboard(force) {
+    if (!el.scoreboardPanel) return;
+    const show = (typeof force === "boolean") ? force : (el.scoreboardPanel.style.display !== "block");
+    el.scoreboardPanel.style.display = show ? "block" : "none";
+    if (!show) el.scoreboardPanel.innerHTML = "";
+    if (el.scoreBtn) el.scoreBtn.setAttribute("aria-expanded", String(show));
+    // Close other panels to avoid clutter
+    if (show) {
+      if (el.historyPanel) el.historyPanel.style.display = "none";
+      if (el.historyBtn) el.historyBtn.setAttribute("aria-expanded", "false");
+      if (el.toolsMenu) el.toolsMenu.style.display = "none";
+      if (el.toolsBtn) el.toolsBtn.setAttribute("aria-expanded", "false");
+    }
+  }
+
+  if (el.scoreBtn) {
+    el.scoreBtn.addEventListener("click", () => toggleScoreboard());
+  }
+
 
   el.dialogCloseBtn.addEventListener("click", closeDialog);
   el.dialogSecondaryBtn.addEventListener("click", closeDialog);
@@ -243,6 +264,15 @@
   // ---------- render ----------
 
   function render() {
+  const setupRow = document.getElementById('setupRow');
+  if (setupRow) {
+    if (state.rounds.length > 0) {
+      setupRow.classList.add('setupHidden');
+    } else {
+      setupRow.classList.remove('setupHidden');
+    }
+  }
+
     // Settings availability
     const hasRounds = state.rounds.length > 0;
     const lockPlayers = hasRounds;
@@ -322,6 +352,9 @@
 
     // History
     renderHistoryPanel();
+
+    // Scoreboard
+    renderScoreboardPanel();
 
     // Ensure tools/history buttons aria-expanded reflect visibility
     el.toolsBtn.setAttribute("aria-expanded", String(el.toolsMenu.style.display === "block"));
@@ -504,6 +537,70 @@
   }
 
   // ---------- players ----------
+  function renderScoreboardPanel() {
+    if (!el.scoreboardPanel) return;
+    if (el.scoreboardPanel.style.display !== "block") return;
+
+    // Primary source: state.players (array/object)
+    let playersRaw = state.players;
+    let players = [];
+    if (Array.isArray(playersRaw)) players = playersRaw;
+    else if (playersRaw && typeof playersRaw === "object") players = Object.values(playersRaw);
+
+    // Fallback: DOM (if state shape differs or was migrated)
+    if (!players.length && el.players) {
+      const cards = el.players.querySelectorAll(".playerCard");
+      players = Array.from(cards).map((card, idx) => {
+        const nameEl = card.querySelector(".pName");
+        const totalEl = card.querySelector(".pTotal");
+        const name = (nameEl?.textContent || "").trim();
+        const totalTxt = (totalEl?.textContent || "").replace(/[^0-9\-]/g, "");
+        const total = totalTxt ? parseInt(totalTxt, 10) : 0;
+        return { id: String(idx), name, total };
+      }).filter(p => p.name);
+    }
+
+    if (!players.length) {
+      // Hide completely to avoid empty band
+      el.scoreboardPanel.style.display = "none";
+      if (el.scoreBtn) el.scoreBtn.setAttribute("aria-expanded", "false");
+      return;
+    }
+
+    const sorted = [...players]
+      .map(p => ({ id: p.id, name: p.name || "", total: typeof p.total === "number" ? p.total : 0 }))
+      .sort((a,b) => (b.total - a.total) || a.name.localeCompare(b.name));
+
+    const headBadges = `
+      <span class="sbPill">Spieler: ${sorted.length}</span>
+      <span class="sbPill">Runden: ${state.rounds.length}</span>
+    `;
+
+    const rows = sorted.map((p, i) => `
+      <div class="sbRow">
+        <div class="sbLeft">
+          <div class="sbRank">${i+1}</div>
+          <div class="sbName" title="${escapeHtml(p.name)}">${escapeHtml(p.name)}</div>
+        </div>
+        <div class="sbScore">${p.total} P</div>
+      </div>
+    `).join("");
+
+    el.scoreboardPanel.innerHTML = `
+      <div class="sbTitle">
+        <h2>Leaderboard · Gesamtpunkte</h2>
+        <button class="sbClose" type="button" id="sbCloseBtn">Schließen</button>
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
+        ${headBadges}
+      </div>
+      <div class="sbGrid">${rows}</div>
+    `;
+
+    const closeBtn = document.getElementById("sbCloseBtn");
+    if (closeBtn) closeBtn.onclick = () => toggleScoreboard(false);
+  }
+
 
   function addPlayerFromInput() {
     const name = (el.addName.value || "").trim();

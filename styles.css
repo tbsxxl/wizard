@@ -973,3 +973,261 @@ body::before{
 }
 
 #totalRoundsBadge, #remainingRoundsBadge{ border-color: rgba(255,255,255,.12); }
+
+
+/* --- Mobile compact header + remove "double field" look --- */
+@media (max-width: 520px){
+  /* Make topbar less tall */
+  #topbar{
+    padding-top: calc(6px + var(--safeT));
+    padding-bottom: 8px;
+  }
+
+  /* Shrink orb */
+  .roundOrbMini{ width:44px; height:44px; }
+  .roundOrbMini .orbNum{ font-size:14px; }
+  .roundOrbMini .orbText{ font-size:9px; }
+
+  /* Hide subtitle + suit strip to save space */
+  .subtitle{ display:none; }
+  .suitStrip{ display:none; }
+
+  /* Make action buttons smaller */
+  .iconBtn{ width:36px; height:36px; border-radius:12px; }
+
+  /* Badges: allow horizontal scroll instead of wrapping into many rows */
+  #subLine{
+    flex-wrap:nowrap;
+    overflow:auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 6px;
+    gap:6px;
+  }
+  #subLine::-webkit-scrollbar{ display:none; }
+  .badge{ padding:5px 8px; font-size:11px; }
+
+  /* Setup row: tighten spacing */
+  #setupRow{ padding-top:8px; padding-bottom:8px; }
+  .setupItem{ padding:10px; }
+
+  /* Player cards: slightly tighter */
+  .playerCard{ padding:14px; border-radius:22px; }
+  .pTop{ padding-bottom:10px; margin-bottom:10px; }
+  .pInputs{ gap:10px; }
+  .field{ padding:10px; border-radius:16px; }
+
+  /* Remove "double field" appearance:
+     Keep the outer field container as the visible control; input becomes transparent and borderless. */
+  .field input{
+    background: transparent !important;
+    border: none !important;
+    padding: 10px 8px !important;
+    box-shadow: none !important;
+  }
+  .field input:focus{
+    outline:none;
+    box-shadow:none !important;
+  }
+
+  /* Bottom bar button: keep comfortable but not huge */
+  #saveRoundBtn{ padding:13px 14px; font-size:15px; }
+  #bottomBar{ padding-top:10px; }
+}
+
+
+/* --- Mobile header centering + cleaner rank badge --- */
+@media (max-width: 520px){
+  /* Stack header: orb centered, then title, then actions */
+  #titleRow{
+    flex-direction: column;
+    align-items: center;
+    justify-content: center !important;
+    gap: 10px;
+  }
+  .roundOrbMini{
+    margin: 0 auto !important;
+  }
+  .titleText{
+    align-items: center !important;
+    text-align:center;
+  }
+  .titleActions{
+    width: auto !important;
+    justify-content: center !important;
+  }
+
+  /* Rank badge: remove "double ring" feeling */
+  .pTop .badge{
+    background: rgba(255,255,255,.05) !important;
+    border: 1px solid rgba(255,255,255,.12) !important;
+    box-shadow: none !important;
+    outline: none !important;
+  }
+}
+
+
+/* --- Desktop header reset (keep mobile centered only on phones) --- */
+@media (min-width: 521px){
+  #topbar{ text-align:left !important; }
+  #titleRow{
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 18px !important;
+  }
+  .titleText{
+    align-items: flex-start !important;
+    text-align: left !important;
+  }
+  .titleActions{
+    width: auto !important;
+    justify-content: flex-end !important;
+  }
+  .subtitle{ display:block !important; }
+  .suitStrip{ display:flex !important; }
+}
+
+/* --- Inputs: remove "double field" look on all sizes --- */
+/* Field container is the control; input is borderless/transparent */
+.field input{
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+.field input:focus{
+  outline: none;
+  box-shadow: none !important;
+}
+
+
+/* --- Remove decorative double corner lines on player cards --- */
+.playerCard::before,
+.playerCard::after,
+.pTop::before,
+.pTop::after{
+  display:none !important;
+}
+
+/* --- Reduce visual weight of player rank badge --- */
+.pTop .badge{
+  box-shadow:none !important;
+  backdrop-filter:none !important;
+}
+
+/* --- Make mobile header even tighter --- */
+@media (max-width:520px){
+  #topbar{
+    padding-top: calc(4px + var(--safeT));
+    padding-bottom:6px;
+  }
+
+  #titleRow{
+    gap:6px !important;
+  }
+
+  .roundOrbMini{
+    width:40px;
+    height:40px;
+  }
+
+  .brandTitle{
+    font-size:18px;
+  }
+}
+
+/* Hide setup when game started */
+.setupHidden{
+  display:none !important;
+}
+
+/* --- Background reliability (iOS) --- */
+html{
+  background: radial-gradient(1400px 700px at 30% -20%, #13204a 0%, transparent 60%), #060912;
+  min-height:100%;
+}
+body{
+  min-height: 100svh;
+}
+
+/* --- Scoreboard panel --- */
+#scoreboardPanel{
+  display:none;
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: 18px;
+  background: rgba(10,14,26,.72);
+  border: 1px solid rgba(255,255,255,.10);
+  box-shadow: 0 20px 60px rgba(0,0,0,.35);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.sbTitle{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  margin-bottom: 10px;
+}
+.sbTitle h2{
+  margin:0;
+  font-size: 13px;
+  letter-spacing:.2px;
+  color: rgba(255,255,255,.85);
+  font-weight: 800;
+}
+.sbClose{
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.04);
+  color: rgba(255,255,255,.9);
+  border-radius: 12px;
+  padding: 6px 10px;
+  cursor:pointer;
+}
+.sbGrid{
+  display:grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+.sbRow{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: rgba(255,255,255,.03);
+  border: 1px solid rgba(255,255,255,.08);
+}
+.sbLeft{
+  display:flex;
+  align-items:baseline;
+  gap:10px;
+  min-width:0;
+}
+.sbRank{
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-weight: 800;
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.10);
+}
+.sbName{
+  font-weight: 800;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.sbScore{
+  font-weight: 900;
+  letter-spacing: -.2px;
+}
+.sbMeta{
+  margin-top: 10px;
+  font-size: 12px;
+  color: rgba(255,255,255,.65);
+}
+@media (min-width: 900px){
+  #scoreboardPanel{ max-width: 520px; }
+}

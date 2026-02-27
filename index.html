@@ -3,8 +3,6 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <link rel="icon" type="image/png" href="./favicon-17.png">
-<link rel="apple-touch-icon" sizes="1024x1024" href="./favicon-17.png">
   <title>Wizard – Score Tracker</title>
   <meta name="theme-color" content="#0b1020">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -46,6 +44,7 @@
 
       <div class="titleActions">
         <button id="historyBtn" class="iconBtn" type="button" aria-label="Verlauf" aria-expanded="false">≡</button>
+        <button id="scoreBtn" class="iconBtn" type="button" aria-label="Scoreboard" aria-expanded="false">🏆</button>
         <button id="toolsBtn" class="iconBtn" type="button" aria-label="Tools" aria-expanded="false">⋯</button>
       </div>
     </div>
@@ -64,14 +63,12 @@
           <span id="roundBadge" class="badge">Runde: 0</span>
           <span id="handBadge" class="badge">Hand: –</span>
           <span id="modeBadge" class="badge">Modus: –</span>
-          <span id="totalRoundsBadge" class="badge">Runden: –</span>
-          <span id="remainingRoundsBadge" class="badge">Rest: –</span>
-          <span class="badge badgeHint">Wizard/Jester zählen</span>
-        </div>
+</div>
       </div>
     </div>
 
     <div id="historyPanel" aria-live="polite"></div>
+    <div id="scoreboardPanel" aria-live="polite"></div>
   </div>
 
   <div id="setupRow">
