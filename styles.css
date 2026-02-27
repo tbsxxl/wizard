@@ -971,3 +971,5 @@ body::before{
     gap: 14px;
   }
 }
+
+#totalRoundsBadge, #remainingRoundsBadge{ border-color: rgba(255,255,255,.12); }

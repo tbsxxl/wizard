@@ -267,6 +267,32 @@
     const modeLabel = state.settings.mode === "up" ? "1→Max" : state.settings.mode === "updown" ? "Up/Down" : "Manuell";
     el.modeBadge.textContent = `Modus: ${modeLabel}`;
 
+    // Total rounds are constrained by Wizard deck size (60 cards incl. Wizards/Jesters)
+        // Many official score sheets cap the maximum hand at 20.
+        const DECK_SIZE = 60;
+        const SHEET_CAP = 20;
+    
+        const playerCount = state.players.length || 0;
+        const maxDealable = playerCount > 0 ? Math.floor(DECK_SIZE / playerCount) : 0;
+        const recommendedMax = maxDealable > 0 ? Math.min(SHEET_CAP, maxDealable) : 0;
+    
+        let maxHand = state.settings.maxHand || 0;
+        if (state.settings.mode !== 'manual') {
+          // For auto modes, never exceed dealable cards per player and sheet cap
+          if (recommendedMax > 0) maxHand = Math.min(maxHand, recommendedMax);
+        }
+    
+        let totalRounds = 0;
+        if (state.settings.mode === 'up') {
+          totalRounds = maxHand;
+        } else if (state.settings.mode === 'updown') {
+          totalRounds = maxHand > 0 ? (maxHand * 2 - 1) : 0;
+        } else {
+          totalRounds = 0; // manual: not predetermined
+        }
+    
+        const totalEl = document.getElementById('totalRoundsBadge');
+
     // Leader
     if (state.players.length === 0) {
       el.leaderName.textContent = "Noch keine Spieler";
