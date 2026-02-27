@@ -4,38 +4,156 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Wizard – Score Tracker</title>
+  <meta name="theme-color" content="#0b1020">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
-
-  <header class="hero">
-    <div class="heroLeft">
-      <div class="roundOrb">
-        <span id="roundNumber">0</span>
-        <div class="roundLabel">Runde</div>
+  <div id="topbar">
+    <div id="titleRow">
+      <!-- Brand: abstract wand + suit pips (no copyrighted art) -->
+      <div class="sigil" aria-hidden="true" title="Wizard">
+        <div class="sigilGlass"></div>
+        <div class="sigilWand"></div>
+        <div class="sigilPips">
+          <span class="pip p1"></span>
+          <span class="pip p2"></span>
+          <span class="pip p3"></span>
+          <span class="pip p4"></span>
+        </div>
+        <div class="sigilRune">W</div>
       </div>
-      <div>
-        <h1 class="brand">Wizard</h1>
-        <div class="sub">Stichspiel · Präzise Ansagen · Wahrscheinlichkeiten</div>
+
+      <div class="titleText">
+        <h1 class="brandTitle">Wizard</h1>
+        <div class="subtitle">Stichspiel · Score Tracker · Local‑First</div>
+        <div class="suitStrip" aria-hidden="true">
+          <span class="suitChip sRed"></span>
+          <span class="suitChip sGreen"></span>
+          <span class="suitChip sBlue"></span>
+          <span class="suitChip sGold"></span>
+          <span class="suitNote">Farben</span>
+        </div>
+      </div>
+
+      <div class="titleActions">
+        <button id="historyBtn" class="iconBtn" type="button" aria-label="Verlauf" aria-expanded="false">≡</button>
+        <button id="toolsBtn" class="iconBtn" type="button" aria-label="Tools" aria-expanded="false">⋯</button>
       </div>
     </div>
 
-    <div class="heroRight">
-      <div class="trumpBox">
-        <div class="trumpLabel">Trumpf</div>
-        <div class="trumpColors">
-          <span class="t red"></span>
-          <span class="t green"></span>
-          <span class="t blue"></span>
-          <span class="t gold"></span>
+    <div id="summaryStrip">
+      <div id="summaryLeft">
+        <div id="leaderLine">
+          <div id="leaderDot"></div>
+          <div id="leaderTextWrap">
+            <span id="leaderCrown">👑</span>
+            <span id="leaderName">Noch keine Spieler</span>
+            <span id="leaderScore"></span>
+          </div>
+        </div>
+        <div id="subLine">
+          <span id="roundBadge" class="badge">Runde: 0</span>
+          <span id="handBadge" class="badge">Hand: –</span>
+          <span id="modeBadge" class="badge">Modus: –</span>
+          <span class="badge badgeHint">Wizard/Jester zählen</span>
         </div>
       </div>
     </div>
-  </header>
 
-  <main>
-    <div id="playersContainer"></div>
-  </main>
+    <div id="historyPanel" aria-live="polite"></div>
+  </div>
+
+  <div id="setupRow">
+    <div class="setupItem">
+      <div class="setupLabel">Modus</div>
+      <select id="modeSelect">
+        <option value="up">1 → Max</option>
+        <option value="updown">1 → Max → 1</option>
+        <option value="manual">Manuell (Handgröße pro Runde)</option>
+      </select>
+    </div>
+
+    <div class="setupItem">
+      <div class="setupLabel">Max (bei Auto)</div>
+      <input type="number" id="maxHandInput" min="1" step="1" inputmode="numeric" />
+    </div>
+
+    <div class="setupItem">
+      <div class="setupLabel">Start</div>
+      <button id="manageBtn" type="button">Spieler</button>
+    </div>
+  </div>
+
+  <div id="emptyState">Keine Spieler. Klicke auf <b>Spieler</b>, um ein Spiel anzulegen.</div>
+
+  <div id="playersContainer"></div>
+
+  <div id="bottomBar">
+    <button id="saveRoundBtn" type="button">Runde speichern</button>
+  </div>
+
+  <div id="toast">
+    <div class="tText">Runde gespeichert</div>
+    <button class="tBtn" id="undoBtn" type="button">Undo</button>
+  </div>
+
+  <!-- Tools menu -->
+  <div id="toolsMenu" role="menu" aria-label="Tools-Menü">
+    <button class="menuItem" id="newGameBtn" type="button" role="menuitem">Neues Spiel</button>
+    <div class="menuSep"></div>
+    <button class="menuItem" id="exportBtn" type="button" role="menuitem">Export (JSON)</button>
+    <button class="menuItem" id="importBtn" type="button" role="menuitem">Import (JSON)</button>
+  </div>
+
+  <!-- Player sheet -->
+  <div id="sheetOverlay"></div>
+  <div id="sheet" aria-hidden="true">
+    <div class="sheetHeader" id="sheetHeader">
+      <div class="sheetGrab"></div>
+      <div class="sheetHeadRow">
+        <div class="sheetTitle">Spieler verwalten</div>
+        <button class="sheetClose" id="sheetCloseBtn" type="button" aria-label="Schließen">✕</button>
+      </div>
+      <div class="sheetDivider"></div>
+    </div>
+
+    <div class="sheetBody">
+      <div class="sheetSection">
+        <h4>Spieler</h4>
+        <div id="sheetPlayersList"></div>
+        <div class="row" id="addRow">
+          <input id="addName" type="text" placeholder="Spielername" autocomplete="off" />
+          <button id="addBtn" type="button">Hinzufügen</button>
+        </div>
+        <div class="hint">Hinweis: Spieleränderungen sind nach der ersten gespeicherten Runde gesperrt.</div>
+      </div>
+
+      <div class="sheetSection">
+        <h4>Wertung</h4>
+        <div class="hint">
+          Standard: exakt getroffen = <b>20 + 10×Stiche</b>, sonst <b>−10×Abweichung</b>.
+        </div>
+      </div>
+
+      <div style="height:14px"></div>
+    </div>
+  </div>
+
+  <!-- Import/Export dialog -->
+  <div class="overlay" id="dialogOverlay"></div>
+  <div class="dialog" id="dialog">
+    <div class="dialogHead">
+      <div class="dialogTitle" id="dialogTitle">Export</div>
+      <button class="dialogClose" id="dialogCloseBtn" type="button" aria-label="Schließen">✕</button>
+    </div>
+    <textarea id="dialogText" spellcheck="false"></textarea>
+    <div class="dialogActions">
+      <button id="dialogPrimaryBtn" type="button">Kopieren</button>
+      <button id="dialogSecondaryBtn" type="button">Schließen</button>
+    </div>
+  </div>
 
   <script src="./app.js"></script>
 </body>
