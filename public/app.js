@@ -1,841 +1,789 @@
-/* Wizard – Score Tracker
-   Local-first, no dependencies.
-   Storage key: wizard.tracker.v1
-*/
+/* app.js — Wizard Punktezähler (ohne Abhängigkeiten, Spielstand lokal im Browser) */
 (() => {
-  const STORAGE_KEY = "wizard.tracker.v1";
+  "use strict";
 
-  /** @type {import('./types').State | any} */
-  let state = loadState() || freshState();
+  const R = window.WizardRules;
+  const KEY = "wizard_state_v2";
+  const OLD_KEY = "wizard.tracker.v1";
+  const UNDO_KEY = "wizard_undo_v1";
+  const PREFS_KEY = "wizard_prefs_v1";
+  const MIN_PLAYERS = 2;
+  const MAX_PLAYERS = 6;
+  const UNDO_LIMIT = 40;
 
-  // Elements
+  const $ = (id) => document.getElementById(id);
   const el = {
-    scoreBtn: document.getElementById('scoreBtn'),
-    scoreboardPanel: document.getElementById('scoreboardPanel'),
-    empty: byId("emptyState"),
-    players: byId("playersContainer"),
-    roundBadge: byId("roundBadge"),
-    handBadge: byId("handBadge"),
-    modeBadge: byId("modeBadge"),
-    leaderName: byId("leaderName"),
-    leaderScore: byId("leaderScore"),
-
-    modeSelect: byId("modeSelect"),
-    maxHandInput: byId("maxHandInput"),
-    manageBtn: byId("manageBtn"),
-
-    saveRoundBtn: byId("saveRoundBtn"),
-
-    toolsBtn: byId("toolsBtn"),
-    toolsMenu: byId("toolsMenu"),
-    newGameBtn: byId("newGameBtn"),
-    exportBtn: byId("exportBtn"),
-    importBtn: byId("importBtn"),
-
-    historyBtn: byId("historyBtn"),
-    historyPanel: byId("historyPanel"),
-
-    sheetOverlay: byId("sheetOverlay"),
-    sheet: byId("sheet"),
-    sheetCloseBtn: byId("sheetCloseBtn"),
-    sheetPlayersList: byId("sheetPlayersList"),
-    addName: byId("addName"),
-    addBtn: byId("addBtn"),
-
-    toast: byId("toast"),
-    undoBtn: byId("undoBtn"),
-
-    dialogOverlay: byId("dialogOverlay"),
-    dialog: byId("dialog"),
-    dialogTitle: byId("dialogTitle"),
-    dialogCloseBtn: byId("dialogCloseBtn"),
-    dialogText: byId("dialogText"),
-    dialogPrimaryBtn: byId("dialogPrimaryBtn"),
-    dialogSecondaryBtn: byId("dialogSecondaryBtn"),
+    subline: $("subline"), undoBtn: $("undoBtn"), tableBtn: $("tableBtn"), menuBtn: $("menuBtn"),
+    setupView: $("setupView"), gameView: $("gameView"), endView: $("endView"),
+    playerCount: $("playerCount"), setupPlayers: $("setupPlayers"), addForm: $("addForm"), addName: $("addName"),
+    nameSuggestions: $("nameSuggestions"), recentNames: $("recentNames"),
+    modeSeg: $("modeSeg"), modeHint: $("modeHint"), maxRow: $("maxRow"), maxHint: $("maxHint"),
+    maxMinus: $("maxMinus"), maxPlus: $("maxPlus"), maxValue: $("maxValue"), ruleNoEven: $("ruleNoEven"),
+    editBanner: $("editBanner"), editText: $("editText"), editCancel: $("editCancel"),
+    handValue: $("handValue"), handLabel: $("handLabel"), handStepper: $("handStepper"),
+    handMinus: $("handMinus"), handPlus: $("handPlus"),
+    roundTitle: $("roundTitle"), dealerLine: $("dealerLine"), progress: $("progress"), sumLine: $("sumLine"),
+    phaseBids: $("phaseBids"), phaseTricks: $("phaseTricks"), playerList: $("playerList"),
+    winnerName: $("winnerName"), winnerScore: $("winnerScore"), finalList: $("finalList"),
+    showTableBtn: $("showTableBtn"), continueBtn: $("continueBtn"),
+    primaryBtn: $("primaryBtn"), toast: $("toast"), toastText: $("toastText"), toastUndo: $("toastUndo"),
+    tableDialog: $("tableDialog"), tableWrap: $("tableWrap"),
+    menuDialog: $("menuDialog"), rematchBtn: $("rematchBtn"), finishBtn: $("finishBtn"), newGameBtn: $("newGameBtn"),
+    themeSeg: $("themeSeg"), wakeToggle: $("wakeToggle"), hapticToggle: $("hapticToggle"),
+    exportBtn: $("exportBtn"), importBtn: $("importBtn"),
+    ioDialog: $("ioDialog"), ioTitle: $("ioTitle"), ioText: $("ioText"), ioPrimary: $("ioPrimary"),
   };
 
-  // Wire base UI
-  el.modeSelect.value = state.settings.mode;
-  el.maxHandInput.value = String(state.settings.maxHand || "");
-  el.modeSelect.addEventListener("change", () => {
-    state.settings.mode = el.modeSelect.value;
-    saveState();
-    render();
-  });
+  /* ---------- Zustand ---------- */
 
-  el.maxHandInput.addEventListener("change", () => {
-    const v = clampInt(parseInt(el.maxHandInput.value, 10), 1, 60);
-    state.settings.maxHand = isFinite(v) ? v : autoMaxHand();
-    el.maxHandInput.value = String(state.settings.maxHand);
-    saveState();
-    render();
-  });
+  const prefs = Object.assign({ theme: "system", wake: true, haptics: true, names: [] }, read(PREFS_KEY) || {});
+  let state = loadState();
+  let undoStack = (read(UNDO_KEY) || []).filter((s) => typeof s === "string").slice(-UNDO_LIMIT);
 
-  el.manageBtn.addEventListener("click", () => openSheet());
-  el.sheetCloseBtn.addEventListener("click", () => closeSheet());
-  el.sheetOverlay.addEventListener("click", () => closeSheet());
-
-  el.addBtn.addEventListener("click", () => addPlayerFromInput());
-  el.addName.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") addPlayerFromInput();
-  });
-
-  el.saveRoundBtn.addEventListener("click", () => saveRound());
-
-  el.undoBtn.addEventListener("click", () => undoLastRoundFromToast());
-
-  el.toolsBtn.addEventListener("click", () => toggleToolsMenu());
-  document.addEventListener("click", (e) => {
-    const target = /** @type {HTMLElement} */ (e.target);
-    if (!target.closest("#toolsMenu") && !target.closest("#toolsBtn")) closeToolsMenu();
-  });
-
-  el.newGameBtn.addEventListener("click", () => {
-    closeToolsMenu();
-    if (!confirm("Neues Spiel starten? Alle Daten werden gelöscht.")) return;
-    state = freshState();
-    saveState();
-    render();
-  });
-
-  el.exportBtn.addEventListener("click", () => {
-    closeToolsMenu();
-    openDialog("Export (JSON)", JSON.stringify(state, null, 2), "Kopieren", () => copyDialogText());
-  });
-
-  el.importBtn.addEventListener("click", () => {
-    closeToolsMenu();
-    openDialog("Import (JSON)", "", "Importieren", () => importFromDialog());
-  });
-
-  el.historyBtn.addEventListener("click", () => toggleHistory());
-  function toggleScoreboard(force) {
-    if (!el.scoreboardPanel) return;
-    const show = (typeof force === "boolean") ? force : (el.scoreboardPanel.style.display !== "block");
-    el.scoreboardPanel.style.display = show ? "block" : "none";
-    if (!show) el.scoreboardPanel.innerHTML = "";
-    if (el.scoreBtn) el.scoreBtn.setAttribute("aria-expanded", String(show));
-    // Close other panels to avoid clutter
-    if (show) {
-      if (el.historyPanel) el.historyPanel.style.display = "none";
-      if (el.historyBtn) el.historyBtn.setAttribute("aria-expanded", "false");
-      if (el.toolsMenu) el.toolsMenu.style.display = "none";
-      if (el.toolsBtn) el.toolsBtn.setAttribute("aria-expanded", "false");
-    }
-  }
-
-  if (el.scoreBtn) {
-    el.scoreBtn.addEventListener("click", () => toggleScoreboard());
-  }
-
-
-  el.dialogCloseBtn.addEventListener("click", closeDialog);
-  el.dialogSecondaryBtn.addEventListener("click", closeDialog);
-  el.dialogOverlay.addEventListener("click", closeDialog);
-
-  // Initial normalization
-  if (!state.settings.maxHand) state.settings.maxHand = autoMaxHand();
-  el.maxHandInput.value = String(state.settings.maxHand);
-
-  // Render
-  render();
-
-  // ---------- core logic ----------
-
-  function saveRound() {
-    if (state.players.length < 2) return;
-
-    const handSize = currentHandSize();
-    if (!handSize) {
-      alert("Handgröße ist nicht gesetzt (Modus: Manuell).");
-      return;
-    }
-
-    // Validate inputs
-    const entry = {};
-    for (const p of state.players) {
-      const bid = clampInt(state.currentInputs[p.id]?.bid, 0, 60);
-      const won = clampInt(state.currentInputs[p.id]?.won, 0, 60);
-      if (bid === null || won === null) {
-        alert("Bitte Ansage und Stiche für alle Spieler eintragen.");
-        return;
-      }
-      if (bid > handSize || won > handSize) {
-        alert(`Ansage/Stiche dürfen in dieser Runde max. ${handSize} sein.`);
-        return;
-      }
-      entry[p.id] = { bid, won };
-    }
-
-    const scores = {};
-    for (const p of state.players) {
-      const { bid, won } = entry[p.id];
-      scores[p.id] = scoreRound(bid, won);
-    }
-
-    const round = {
-      id: uid(),
-      index: state.rounds.length + 1,
-      handSize,
-      mode: state.settings.mode,
-      entry,
-      scores,
-      createdAt: Date.now()
+  function freshState(players = []) {
+    return {
+      version: 2, started: false, finished: false,
+      players, dealerStart: 0,
+      settings: { mode: "standard", maxHand: null, noEven: false },
+      rounds: [], current: emptyDraft(), phase: "bids", editing: null, stash: null,
     };
-
-    // Apply totals
-    for (const p of state.players) {
-      p.total += scores[p.id];
-    }
-
-    state.rounds.push(round);
-
-    // Clear current inputs
-    state.currentInputs = freshInputs();
-
-    saveState();
-    render();
-
-    showToast(round.id);
   }
-
-  function scoreRound(bid, won) {
-    if (bid === won) return 20 + 10 * won;
-    return -10 * Math.abs(bid - won);
-  }
-
-  function undoLastRoundFromToast() {
-    const rid = state.ui?.lastSavedRoundId;
-    if (!rid) return;
-    undoRoundById(rid);
-    hideToast();
-  }
-
-  function undoRoundById(roundId) {
-    const idx = state.rounds.findIndex(r => r.id === roundId);
-    if (idx < 0) return;
-
-    const round = state.rounds[idx];
-
-    // Revert totals
-    for (const p of state.players) {
-      p.total -= (round.scores[p.id] || 0);
-    }
-
-    state.rounds.splice(idx, 1);
-
-    // Renumber
-    state.rounds.forEach((r, i) => r.index = i + 1);
-
-    saveState();
-    render();
-  }
-
-  function currentHandSize() {
-    const mode = state.settings.mode;
-    if (mode === "manual") {
-      // manual: user sets hand size via maxHandInput per round (abuse as "hand this round")
-      const v = clampInt(parseInt(el.maxHandInput.value, 10), 1, 60);
-      return v || null;
-    }
-
-    const max = clampInt(state.settings.maxHand, 1, 60) || autoMaxHand();
-    const n = state.rounds.length; // already completed rounds
-    if (mode === "up") return clampInt(n + 1, 1, max);
-
-    // updown
-    const seq = buildUpDownSequence(max);
-    return seq[n] ?? null;
-  }
-
-  function buildUpDownSequence(max) {
-    // 1..max..1 (without duplicating endpoints)
-    const up = Array.from({ length: max }, (_, i) => i + 1);
-    const down = Array.from({ length: max - 1 }, (_, i) => max - 1 - i);
-    return up.concat(down);
-  }
-
-  function autoMaxHand() {
-    // Common table rule: max hand = floor(60 / players)
-    const n = Math.max(1, state.players.length);
-    return Math.max(1, Math.floor(60 / n));
-  }
-
-  // ---------- render ----------
-
-  function render() {
-  const setupRow = document.getElementById('setupRow');
-  if (setupRow) {
-    if (state.rounds.length > 0) {
-      setupRow.classList.add('setupHidden');
-    } else {
-      setupRow.classList.remove('setupHidden');
-    }
-  }
-
-    // Settings availability
-    const hasRounds = state.rounds.length > 0;
-    const lockPlayers = hasRounds;
-
-    // Auto max update (if player count changed and no rounds yet)
-    if (!hasRounds) {
-      state.settings.maxHand = clampInt(state.settings.maxHand, 1, 60) || autoMaxHand();
-      el.maxHandInput.value = String(state.settings.mode === "manual" ? (state.settings.maxHand || 1) : state.settings.maxHand);
-    }
-
-    el.modeSelect.value = state.settings.mode;
-
-    // Badges
-    const currentRound = state.rounds.length + 1;
-    el.roundBadge.textContent = `Runde: ${currentRound}`;
-    const orb = document.getElementById('orbRound');
-    if (orb) orb.textContent = String(currentRound);
-
-    const hs = currentHandSize();
-    el.handBadge.textContent = `Hand: ${hs ? hs : "–"}`;
-
-    const modeLabel = state.settings.mode === "up" ? "1→Max" : state.settings.mode === "updown" ? "Up/Down" : "Manuell";
-    el.modeBadge.textContent = `Modus: ${modeLabel}`;
-
-    // Total rounds are constrained by Wizard deck size (60 cards incl. Wizards/Jesters)
-        // Many official score sheets cap the maximum hand at 20.
-        const DECK_SIZE = 60;
-        const SHEET_CAP = 20;
-    
-        const playerCount = state.players.length || 0;
-        const maxDealable = playerCount > 0 ? Math.floor(DECK_SIZE / playerCount) : 0;
-        const recommendedMax = maxDealable > 0 ? Math.min(SHEET_CAP, maxDealable) : 0;
-    
-        let maxHand = state.settings.maxHand || 0;
-        if (state.settings.mode !== 'manual') {
-          // For auto modes, never exceed dealable cards per player and sheet cap
-          if (recommendedMax > 0) maxHand = Math.min(maxHand, recommendedMax);
-        }
-    
-        let totalRounds = 0;
-        if (state.settings.mode === 'up') {
-          totalRounds = maxHand;
-        } else if (state.settings.mode === 'updown') {
-          totalRounds = maxHand > 0 ? (maxHand * 2 - 1) : 0;
-        } else {
-          totalRounds = 0; // manual: not predetermined
-        }
-    
-        const totalEl = document.getElementById('totalRoundsBadge');
-
-    // Leader
-    if (state.players.length === 0) {
-      el.leaderName.textContent = "Noch keine Spieler";
-      el.leaderScore.textContent = "";
-    } else {
-      const sorted = [...state.players].sort((a,b) => b.total - a.total);
-      const top = sorted[0];
-      el.leaderName.textContent = top.name;
-      el.leaderScore.textContent = `${top.total} P`;
-    }
-
-    // Empty state
-    el.empty.style.display = state.players.length ? "none" : "block";
-
-    // Players grid
-    el.players.innerHTML = "";
-    for (const p of state.players) {
-      el.players.appendChild(renderPlayerCard(p, hs));
-    }
-
-    // Save button state
-    const canSave = state.players.length >= 2 && hs !== null;
-    el.saveRoundBtn.disabled = !canSave;
-
-    // Sheet content
-    renderSheetPlayers(lockPlayers);
-
-    // History
-    renderHistoryPanel();
-
-    // Scoreboard
-    renderScoreboardPanel();
-
-    // Ensure tools/history buttons aria-expanded reflect visibility
-    el.toolsBtn.setAttribute("aria-expanded", String(el.toolsMenu.style.display === "block"));
-    el.historyBtn.setAttribute("aria-expanded", String(el.historyPanel.style.display === "block"));
-
-    saveState(); // keep derived changes (e.g., auto max) consistent
-  }
-
-  function renderPlayerCard(player, handSize) {
-    const wrap = div("playerCard");
-
-    const top = div("pTop");
-    const left = div();
-    const name = div("pName");
-    name.textContent = player.name;
-    const total = div("pTotal");
-    total.textContent = `${player.total} Punkte`;
-    left.appendChild(name);
-    left.appendChild(total);
-
-    const right = div();
-    right.innerHTML = `<span class="badge">#${rankOf(player.id)}</span>`;
-    top.appendChild(left);
-    top.appendChild(right);
-
-    const inputs = div("pInputs");
-
-    const bidField = div("field");
-    bidField.innerHTML = `<div class="label">Ansage</div>`;
-    const bidInput = document.createElement("input");
-    bidInput.type = "number";
-    bidInput.min = "0";
-    bidInput.step = "1";
-    bidInput.inputMode = "numeric";
-    bidInput.value = String(state.currentInputs[player.id]?.bid ?? "");
-    bidInput.placeholder = "0";
-    bidInput.addEventListener("input", () => {
-      const v = parseInt(bidInput.value, 10);
-      state.currentInputs[player.id] = state.currentInputs[player.id] || {};
-      state.currentInputs[player.id].bid = isFinite(v) ? v : null;
-      // live round score preview
-      render();
-    });
-    bidField.appendChild(bidInput);
-
-    const wonField = div("field");
-    wonField.innerHTML = `<div class="label">Stiche</div>`;
-    const wonInput = document.createElement("input");
-    wonInput.type = "number";
-    wonInput.min = "0";
-    wonInput.step = "1";
-    wonInput.inputMode = "numeric";
-    wonInput.value = String(state.currentInputs[player.id]?.won ?? "");
-    wonInput.placeholder = "0";
-    wonInput.addEventListener("input", () => {
-      const v = parseInt(wonInput.value, 10);
-      state.currentInputs[player.id] = state.currentInputs[player.id] || {};
-      state.currentInputs[player.id].won = isFinite(v) ? v : null;
-      render();
-    });
-    wonField.appendChild(wonInput);
-
-    inputs.appendChild(bidField);
-    inputs.appendChild(wonField);
-
-    const rs = div("pRoundScore");
-    const rsL = div();
-    rsL.innerHTML = `<div class="rsLabel">Rundenpunkte (Preview)</div>`;
-    const rsV = div("rsValue");
-
-    const bid = state.currentInputs[player.id]?.bid;
-    const won = state.currentInputs[player.id]?.won;
-    let preview = "–";
-    if (isFinite(bid) && isFinite(won)) {
-      if (handSize && (bid > handSize || won > handSize)) preview = "⚠︎";
-      else preview = String(scoreRound(bid, won));
-    }
-    rsV.textContent = preview;
-
-    rs.appendChild(rsL);
-    rs.appendChild(rsV);
-
-    wrap.appendChild(top);
-    wrap.appendChild(inputs);
-    wrap.appendChild(rs);
-
-    return wrap;
-  }
-
-  function rankOf(pid) {
-    const sorted = [...state.players].sort((a,b) => b.total - a.total);
-    return sorted.findIndex(p => p.id === pid) + 1;
-  }
-
-  function renderSheetPlayers(lockPlayers) {
-    el.sheetPlayersList.innerHTML = "";
-
-    if (state.players.length === 0) {
-      const p = document.createElement("div");
-      p.className = "hint";
-      p.textContent = "Noch keine Spieler.";
-      el.sheetPlayersList.appendChild(p);
-    }
-
-    for (const p of state.players) {
-      const pill = div("pill");
-      const name = div("pillName");
-      name.textContent = p.name;
-      pill.appendChild(name);
-
-      const btn = document.createElement("button");
-      btn.className = "pillBtn";
-      btn.type = "button";
-      btn.textContent = "✕";
-      btn.title = "Entfernen";
-      btn.disabled = lockPlayers;
-      btn.addEventListener("click", () => {
-        if (lockPlayers) return;
-        removePlayer(p.id);
-      });
-      pill.appendChild(btn);
-
-      el.sheetPlayersList.appendChild(pill);
-    }
-
-    el.addBtn.disabled = lockPlayers;
-    el.addName.disabled = lockPlayers;
-  }
-
-  function renderHistoryPanel() {
-    // Show panel only if toggled open
-    if (el.historyPanel.style.display !== "block") return;
-
-    el.historyPanel.innerHTML = "";
-
-    if (state.rounds.length === 0) {
-      const row = div("hRow");
-      row.innerHTML = `<div class="hLeft"><div class="hTitle">Noch kein Verlauf</div><div class="hMeta">Speichere die erste Runde.</div></div>`;
-      el.historyPanel.appendChild(row);
-      return;
-    }
-
-    // latest first
-    const rounds = [...state.rounds].sort((a,b) => b.index - a.index);
-
-    for (const r of rounds) {
-      const row = div("hRow");
-      const left = div("hLeft");
-      const title = div("hTitle");
-      title.textContent = `Runde ${r.index}`;
-      const meta = div("hMeta");
-      meta.textContent = `Hand ${r.handSize} · ${new Date(r.createdAt).toLocaleString("de-DE")}`;
-
-      // compact per-player summary
-      const ps = div("hPlayers");
-      ps.textContent = state.players.map(p => {
-        const e = r.entry[p.id];
-        const s = r.scores[p.id];
-        if (!e) return `${p.name}: –`;
-        return `${p.name}: ${e.bid}/${e.won} (${s >= 0 ? "+" : ""}${s})`;
-      }).join(" · ");
-
-      left.appendChild(title);
-      left.appendChild(meta);
-      left.appendChild(ps);
-
-      const right = div("hRight");
-      const del = document.createElement("button");
-      del.className = "hBtn danger";
-      del.type = "button";
-      del.textContent = "Undo";
-      del.addEventListener("click", () => undoRoundById(r.id));
-
-      right.appendChild(del);
-
-      row.appendChild(left);
-      row.appendChild(right);
-      el.historyPanel.appendChild(row);
-    }
-  }
-
-  // ---------- players ----------
-  function renderScoreboardPanel() {
-    if (!el.scoreboardPanel) return;
-    if (el.scoreboardPanel.style.display !== "block") return;
-
-    // Primary source: state.players (array/object)
-    let playersRaw = state.players;
-    let players = [];
-    if (Array.isArray(playersRaw)) players = playersRaw;
-    else if (playersRaw && typeof playersRaw === "object") players = Object.values(playersRaw);
-
-    // Fallback: DOM (if state shape differs or was migrated)
-    if (!players.length && el.players) {
-      const cards = el.players.querySelectorAll(".playerCard");
-      players = Array.from(cards).map((card, idx) => {
-        const nameEl = card.querySelector(".pName");
-        const totalEl = card.querySelector(".pTotal");
-        const name = (nameEl?.textContent || "").trim();
-        const totalTxt = (totalEl?.textContent || "").replace(/[^0-9\-]/g, "");
-        const total = totalTxt ? parseInt(totalTxt, 10) : 0;
-        return { id: String(idx), name, total };
-      }).filter(p => p.name);
-    }
-
-    if (!players.length) {
-      // Hide completely to avoid empty band
-      el.scoreboardPanel.style.display = "none";
-      if (el.scoreBtn) el.scoreBtn.setAttribute("aria-expanded", "false");
-      return;
-    }
-
-    const sorted = [...players]
-      .map(p => ({ id: p.id, name: p.name || "", total: typeof p.total === "number" ? p.total : 0 }))
-      .sort((a,b) => (b.total - a.total) || a.name.localeCompare(b.name));
-
-    const headBadges = `
-      <span class="sbPill">Spieler: ${sorted.length}</span>
-      <span class="sbPill">Runden: ${state.rounds.length}</span>
-    `;
-
-    const rows = sorted.map((p, i) => `
-      <div class="sbRow">
-        <div class="sbLeft">
-          <div class="sbRank">${i+1}</div>
-          <div class="sbName" title="${escapeHtml(p.name)}">${escapeHtml(p.name)}</div>
-        </div>
-        <div class="sbScore">${p.total} P</div>
-      </div>
-    `).join("");
-
-    el.scoreboardPanel.innerHTML = `
-      <div class="sbTitle">
-        <h2>Leaderboard · Gesamtpunkte</h2>
-        <button class="sbClose" type="button" id="sbCloseBtn">Schließen</button>
-      </div>
-      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
-        ${headBadges}
-      </div>
-      <div class="sbGrid">${rows}</div>
-    `;
-
-    const closeBtn = document.getElementById("sbCloseBtn");
-    if (closeBtn) closeBtn.onclick = () => toggleScoreboard(false);
-  }
-
-
-  function addPlayerFromInput() {
-    const name = (el.addName.value || "").trim();
-    if (!name) return;
-    if (state.rounds.length > 0) return;
-
-    if (state.players.some(p => p.name.toLowerCase() === name.toLowerCase())) {
-      alert("Spielername existiert bereits.");
-      return;
-    }
-
-    state.players.push({ id: uid(), name, total: 0 });
-    state.currentInputs = freshInputs();
-    el.addName.value = "";
-    // auto max hand update
-    state.settings.maxHand = autoMaxHand();
-    el.maxHandInput.value = String(state.settings.maxHand);
-
-    saveState();
-    render();
-  }
-
-  function removePlayer(pid) {
-    if (state.rounds.length > 0) return;
-    state.players = state.players.filter(p => p.id !== pid);
-    delete state.currentInputs[pid];
-
-    state.settings.maxHand = autoMaxHand();
-    el.maxHandInput.value = String(state.settings.maxHand);
-
-    saveState();
-    render();
-  }
-
-  // ---------- menus / overlays ----------
-
-  function toggleToolsMenu() {
-    const open = el.toolsMenu.style.display === "block";
-    if (open) closeToolsMenu();
-    else {
-      el.toolsMenu.style.display = "block";
-      el.toolsBtn.setAttribute("aria-expanded", "true");
-    }
-  }
-  function closeToolsMenu() {
-    el.toolsMenu.style.display = "none";
-    el.toolsBtn.setAttribute("aria-expanded", "false");
-  }
-
-  function toggleHistory() {
-    const open = el.historyPanel.style.display === "block";
-    el.historyPanel.style.display = open ? "none" : "block";
-    el.historyBtn.setAttribute("aria-expanded", String(!open));
-    if (!open) renderHistoryPanel();
-  }
-
-  function openSheet() {
-    el.sheetOverlay.classList.add("show");
-    el.sheet.classList.add("show");
-    el.sheet.setAttribute("aria-hidden", "false");
-    // focus
-    setTimeout(() => el.addName.focus(), 50);
-  }
-  function closeSheet() {
-    el.sheetOverlay.classList.remove("show");
-    el.sheet.classList.remove("show");
-    el.sheet.setAttribute("aria-hidden", "true");
-  }
-
-  function showToast(lastRoundId) {
-    state.ui = state.ui || {};
-    state.ui.lastSavedRoundId = lastRoundId;
-    el.toast.classList.add("show");
-    saveState();
-    // auto-hide after 6s
-    clearTimeout(state.ui.toastTimer);
-    state.ui.toastTimer = setTimeout(() => hideToast(), 6000);
-  }
-  function hideToast() {
-    el.toast.classList.remove("show");
-  }
-
-  // Dialog
-  function openDialog(title, text, primaryLabel, primaryAction) {
-    el.dialogTitle.textContent = title;
-    el.dialogText.value = text;
-    el.dialogPrimaryBtn.textContent = primaryLabel;
-    el.dialogPrimaryBtn.onclick = primaryAction;
-    el.dialogOverlay.classList.add("show");
-    el.dialog.classList.add("show");
-    setTimeout(() => el.dialogText.focus(), 40);
-  }
-  function closeDialog() {
-    el.dialogOverlay.classList.remove("show");
-    el.dialog.classList.remove("show");
-  }
-  async function copyDialogText() {
-    try {
-      await navigator.clipboard.writeText(el.dialogText.value);
-      el.dialogPrimaryBtn.textContent = "Kopiert";
-      setTimeout(() => (el.dialogPrimaryBtn.textContent = "Kopieren"), 1200);
-    } catch {
-      alert("Kopieren nicht möglich. Bitte manuell markieren und kopieren.");
-    }
-  }
-  function importFromDialog() {
-    const raw = el.dialogText.value.trim();
-    if (!raw) return;
-    let obj;
-    try { obj = JSON.parse(raw); }
-    catch { alert("Ungültiges JSON."); return; }
-
-    const migrated = migrate(obj);
-    if (!migrated) { alert("Import fehlgeschlagen (Schema)."); return; }
-
-    state = migrated;
-    saveState();
-    closeDialog();
-    render();
-  }
-
-  // ---------- persistence ----------
+  function emptyDraft(hand = 1) { return { bids: {}, tricks: {}, hand }; }
 
   function loadState() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return null;
-      const obj = JSON.parse(raw);
-      return migrate(obj);
-    } catch {
-      return null;
-    }
+    const s = normalize(read(KEY));
+    if (s) return s;
+    const old = migrateV1(read(OLD_KEY));   // Spielstand der Vorversion übernehmen
+    return old || freshState();
   }
 
-  function saveState() {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch {
-      // ignore
-    }
-  }
-
-  function migrate(obj) {
-    // v1 schema (very tolerant)
-    if (!obj || typeof obj !== "object") return null;
-
-    const v = obj.version || 1;
-
-    if (v !== 1) {
-      // unknown future versions: attempt best-effort
-    }
-
-    const s = {
-      version: 1,
-      settings: {
-        mode: (obj.settings?.mode === "up" || obj.settings?.mode === "updown" || obj.settings?.mode === "manual") ? obj.settings.mode : "updown",
-        maxHand: clampInt(obj.settings?.maxHand, 1, 60) || null,
-      },
-      players: Array.isArray(obj.players) ? obj.players.map(p => ({
-        id: String(p.id || uid()),
-        name: String(p.name || "Spieler"),
-        total: clampInt(p.total, -999999, 999999) || 0,
-      })) : [],
-      rounds: Array.isArray(obj.rounds) ? obj.rounds.map((r, i) => ({
-        id: String(r.id || uid()),
-        index: clampInt(r.index, 1, 9999) || (i + 1),
-        handSize: clampInt(r.handSize, 1, 60) || 1,
-        mode: r.mode || "updown",
-        entry: r.entry || {},
-        scores: r.scores || {},
-        createdAt: r.createdAt || Date.now(),
-      })) : [],
-      currentInputs: obj.currentInputs && typeof obj.currentInputs === "object" ? obj.currentInputs : {},
-      ui: obj.ui && typeof obj.ui === "object" ? obj.ui : {},
+  function normalize(o) {
+    if (!o || typeof o !== "object") return null;
+    if (o.version !== 2) return migrateV1(o);
+    const s = freshState();
+    s.players = (Array.isArray(o.players) ? o.players : [])
+      .filter((p) => p && p.id != null)
+      .slice(0, MAX_PLAYERS)
+      .map((p) => ({ id: String(p.id), name: String(p.name || "Spieler").slice(0, 20) }));
+    const ids = s.players.map((p) => p.id);
+    const intMap = (m, max) => {
+      const out = {};
+      for (const id of ids) { const v = m && m[id]; if (Number.isInteger(v) && v >= 0 && v <= max) out[id] = v; }
+      return out;
     };
-
-    // Ensure input map contains keys
-    s.currentInputs = {};
-    for (const p of s.players) {
-      const i = obj.currentInputs?.[p.id] || {};
-      s.currentInputs[p.id] = {
-        bid: isFinite(i.bid) ? i.bid : null,
-        won: isFinite(i.won) ? i.won : null,
-      };
+    const mode = ["standard", "updown", "manual"].includes(o.settings && o.settings.mode) ? o.settings.mode : "standard";
+    s.settings = {
+      mode,
+      maxHand: Number.isInteger(o.settings && o.settings.maxHand) ? o.settings.maxHand : null,
+      noEven: !!(o.settings && o.settings.noEven),
+    };
+    s.dealerStart = Number.isInteger(o.dealerStart) ? o.dealerStart : 0;
+    s.rounds = (Array.isArray(o.rounds) ? o.rounds : []).map((r) => {
+      const hand = clamp(r && r.hand, 1, R.DECK) || 1;
+      return { hand, bids: intMap(r.bids, hand), tricks: intMap(r.tricks, hand), at: Number(r.at) || Date.now() };
+    });
+    const c = o.current || {};
+    s.current = { bids: intMap(c.bids, R.DECK), tricks: intMap(c.tricks, R.DECK), hand: clamp(c.hand, 1, R.DECK) || 1 };
+    s.started = !!o.started && s.players.length >= MIN_PLAYERS;
+    s.finished = !!o.finished && s.started;
+    s.phase = o.phase === "tricks" ? "tricks" : "bids";
+    if (Number.isInteger(o.editing) && o.editing >= 0 && o.editing < s.rounds.length && o.stash) {
+      s.editing = o.editing;
+      s.stash = { bids: intMap(o.stash.bids, R.DECK), tricks: intMap(o.stash.tricks, R.DECK), hand: clamp(o.stash.hand, 1, R.DECK) || 1, phase: o.stash.phase === "tricks" ? "tricks" : "bids" };
     }
-
-    // If totals inconsistent with rounds, recompute once (safety)
-    const recomputed = s.players.map(p => ({ ...p, total: 0 }));
-    const map = new Map(recomputed.map(p => [p.id, p]));
-    for (const r of s.rounds.sort((a,b)=>a.index-b.index)) {
-      for (const pid of Object.keys(r.scores || {})) {
-        const p = map.get(pid);
-        if (p) p.total += (r.scores[pid] || 0);
-      }
-    }
-    s.players = recomputed;
-
-    // Normalize maxHand
-    if (!s.settings.maxHand) s.settings.maxHand = Math.max(1, Math.floor(60 / Math.max(1, s.players.length)));
-
     return s;
   }
 
-  function freshState() {
-    return {
-      version: 1,
-      settings: { mode: "updown", maxHand: null },
-      players: [],
-      rounds: [],
-      currentInputs: {},
-      ui: {}
-    };
+  /* Format der ersten Version: { players:[{id,name,total}], rounds:[{handSize, entry:{id:{bid,won}}}], settings:{mode,maxHand} } */
+  function migrateV1(o) {
+    if (!o || typeof o !== "object" || !Array.isArray(o.players)) return null;
+    const s = freshState(o.players.slice(0, MAX_PLAYERS).map((p) => ({ id: String(p.id || uid()), name: String(p.name || "Spieler").slice(0, 20) })));
+    const m = o.settings && o.settings.mode;
+    s.settings.mode = m === "updown" ? "updown" : m === "manual" ? "manual" : "standard";
+    const auto = R.maxHand(s.players.length);
+    const mh = clamp(o.settings && o.settings.maxHand, 1, auto);
+    s.settings.maxHand = mh && mh !== auto ? mh : null;
+    s.rounds = (Array.isArray(o.rounds) ? o.rounds : []).slice().sort((a, b) => (a.index || 0) - (b.index || 0)).map((r) => {
+      const bids = {}, tricks = {};
+      for (const p of s.players) {
+        const e = r.entry && r.entry[p.id];
+        if (e && Number.isInteger(e.bid) && Number.isInteger(e.won)) { bids[p.id] = e.bid; tricks[p.id] = e.won; }
+      }
+      return { hand: clamp(r.handSize, 1, R.DECK) || 1, bids, tricks, at: Number(r.createdAt) || Date.now() };
+    });
+    s.started = s.rounds.length > 0 && s.players.length >= MIN_PLAYERS;
+    const sch = s.started && schedFor(s);
+    s.finished = !!(sch && s.rounds.length >= sch.length);
+    s.current.hand = nextManualHand(s);
+    return s;
   }
 
-  function freshInputs() {
-    const o = {};
-    for (const p of state.players) o[p.id] = { bid: null, won: null };
-    return o;
+  function save() {
+    write(KEY, state);
+    write(UNDO_KEY, undoStack);
   }
 
-  // ---------- helpers ----------
-  function byId(id){ return document.getElementById(id); }
-  function div(cls){
-    const d = document.createElement("div");
-    if (cls) d.className = cls;
-    return d;
+  /* Jede Änderung mit Rückgängig-Schritt läuft hierüber. */
+  function commit(fn, undoable = true) {
+    if (undoable) {
+      undoStack.push(JSON.stringify(state));
+      if (undoStack.length > UNDO_LIMIT) undoStack.shift();
+    }
+    fn();
+    save();
+    render();
   }
-  function uid(){
-    return Math.random().toString(16).slice(2) + Date.now().toString(16);
+
+  function undo() {
+    const prev = undoStack.pop();
+    if (!prev) return;
+    state = normalize(JSON.parse(prev)) || state;
+    hideToast();
+    save();
+    render();
+    haptic(15);
   }
-  function clampInt(v, min, max){
-    if (v === null || v === undefined) return null;
-    const n = typeof v === "number" ? v : parseInt(String(v), 10);
-    if (!isFinite(n)) return null;
-    const k = Math.trunc(n);
-    return Math.min(max, Math.max(min, k));
+
+  /* ---------- Abgeleitete Werte ---------- */
+
+  const n = () => state.players.length;
+  function maxFor(s) {
+    const auto = R.maxHand(s.players.length);
+    return clamp(s.settings.maxHand, 1, auto) || auto;
   }
-})(); 
+  function schedFor(s) { return R.schedule(s.settings.mode, maxFor(s)); }
+  const sched = () => schedFor(state);
+  const totalRounds = () => { const sc = sched(); return sc ? sc.length : null; };
+  const entryIndex = () => (state.editing != null ? state.editing : state.rounds.length);
+  function entryHand() {
+    if (state.editing != null || state.settings.mode === "manual") return state.current.hand;
+    const sc = sched();
+    return sc[Math.min(entryIndex(), sc.length - 1)];
+  }
+  function nextManualHand(s) {
+    const last = s.rounds[s.rounds.length - 1];
+    return last ? Math.min(last.hand + 1, R.maxHand(s.players.length)) : 1;
+  }
+  /* Spieler in Ansage-Reihenfolge der Runde: links vom Geber beginnend, Geber zuletzt. */
+  function biddingOrder(idx) {
+    const first = R.firstBidderOf(idx, state.dealerStart, n());
+    return state.players.map((_, i) => state.players[(first + i) % n()]);
+  }
+  const dealerOf = (idx) => state.players[R.dealerOf(idx, state.dealerStart, n())];
+  const sum = (m) => Object.values(m).reduce((a, b) => a + b, 0);
+  const allSet = (m) => state.players.every((p) => Number.isInteger(m[p.id]));
+
+  function forbiddenFor(pid) {
+    if (!state.settings.noEven) return null;
+    const dealer = dealerOf(entryIndex());
+    if (!dealer || dealer.id !== pid) return null;
+    const others = state.players.filter((p) => p.id !== pid).map((p) => state.current.bids[p.id]);
+    if (!others.every(Number.isInteger)) return null;
+    return R.forbiddenBid(entryHand(), others);
+  }
+
+  /* ---------- Aktionen ---------- */
+
+  function addPlayer(name) {
+    name = String(name || "").trim().replace(/\s+/g, " ").slice(0, 20);
+    if (!name || state.started) return;
+    if (n() >= MAX_PLAYERS) return toast(`Höchstens ${MAX_PLAYERS} Spieler`);
+    if (state.players.some((p) => p.name.toLowerCase() === name.toLowerCase())) return toast(`„${name}" ist schon dabei`);
+    commit(() => { state.players.push({ id: uid(), name }); }, false);
+  }
+
+  function removePlayer(id) {
+    commit(() => {
+      const i = state.players.findIndex((p) => p.id === id);
+      state.players.splice(i, 1);
+      if (state.dealerStart >= n()) state.dealerStart = 0;
+      else if (i < state.dealerStart) state.dealerStart--;
+    });
+  }
+
+  function movePlayer(id, dir) {
+    commit(() => {
+      const i = state.players.findIndex((p) => p.id === id), j = i + dir;
+      if (j < 0 || j >= n()) return;
+      const dealerId = state.players[state.dealerStart].id;
+      [state.players[i], state.players[j]] = [state.players[j], state.players[i]];
+      state.dealerStart = state.players.findIndex((p) => p.id === dealerId);
+    }, false);
+  }
+
+  function startGame() {
+    if (n() < MIN_PLAYERS) return;
+    rememberNames();
+    commit(() => {
+      state.started = true;
+      state.finished = false;
+      state.rounds = [];
+      state.current = emptyDraft(1);
+      state.phase = "bids";
+    });
+    requestWake();
+  }
+
+  function setValue(kind, pid, v) {
+    const m = state.current[kind];
+    m[pid] = m[pid] === v ? undefined : v;  // erneutes Antippen hebt die Auswahl auf
+    if (m[pid] === undefined) delete m[pid];
+    haptic(8);
+    let autoFilled = null;
+    if (kind === "tricks" && m[pid] !== undefined) {
+      // Letzter offener Spieler: Stiche ergeben sich aus der Kartenzahl
+      const open = state.players.filter((p) => !Number.isInteger(m[p.id]));
+      const rest = entryHand() - sum(m);
+      if (open.length === 1 && rest >= 0) { m[open[0].id] = rest; autoFilled = open[0].id; }
+    }
+    commit(() => {}, false);
+    if (autoFilled) flash(autoFilled);
+    else focusNext(kind, pid);
+  }
+
+  function nextPhase() {
+    if (!allSet(state.current.bids)) return;
+    commit(() => { state.phase = "tricks"; }, false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function saveRound() {
+    const c = state.current, hand = entryHand();
+    if (!allSet(c.bids) || !allSet(c.tricks)) return;
+    const t = sum(c.tricks);
+    if (t !== hand && !confirm(`Es wurden ${t} Stiche eingetragen, aber ${hand} ${hand === 1 ? "Karte" : "Karten"} gespielt. Trotzdem speichern?`)) return;
+
+    const round = { hand, bids: { ...c.bids }, tricks: { ...c.tricks }, at: Date.now() };
+    if (state.editing != null) {
+      const idx = state.editing;
+      commit(() => {
+        round.at = state.rounds[idx].at;
+        state.rounds[idx] = round;
+        restoreStash();
+      });
+      toast(`Runde ${idx + 1} korrigiert`, true);
+      return;
+    }
+    commit(() => {
+      state.rounds.push(round);
+      const total = totalRounds();
+      if (total && state.rounds.length >= total) state.finished = true;
+      state.current = emptyDraft(nextManualHand(state));
+      state.phase = "bids";
+    });
+    haptic([10, 40, 10]);
+    toast(state.finished ? "Letzte Runde gespeichert" : `Runde ${state.rounds.length} gespeichert`, true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function startEdit(idx) {
+    if (state.editing != null) return;
+    const r = state.rounds[idx];
+    commit(() => {
+      state.stash = { ...state.current, phase: state.phase };
+      state.current = { bids: { ...r.bids }, tricks: { ...r.tricks }, hand: r.hand };
+      state.editing = idx;
+      state.phase = "tricks";
+    }, false);
+    window.scrollTo({ top: 0 });
+  }
+
+  function restoreStash() {
+    const st = state.stash || { ...emptyDraft(nextManualHand(state)), phase: "bids" };
+    state.current = { bids: st.bids, tricks: st.tricks, hand: st.hand };
+    state.phase = st.phase;
+    state.editing = null;
+    state.stash = null;
+  }
+
+  function finishGame() {
+    if (!state.rounds.length) return toast("Noch keine Runde gespielt");
+    commit(() => { if (state.editing != null) restoreStash(); state.finished = true; });
+  }
+
+  function rematch() {
+    if (n() < MIN_PLAYERS) return;
+    commit(() => {
+      const keep = { players: state.players, settings: state.settings };
+      const next = (state.dealerStart + 1) % n();
+      state = freshState(keep.players);
+      state.settings = keep.settings;
+      state.dealerStart = next;
+      state.started = true;
+    });
+    toast("Neues Spiel – Geber rückt weiter", true);
+  }
+
+  function newGame() {
+    commit(() => {
+      const keep = { players: state.players, settings: state.settings, dealerStart: state.dealerStart };
+      state = freshState(keep.players);
+      state.settings = keep.settings;
+      state.dealerStart = keep.dealerStart;
+    });
+  }
+
+  function rememberNames() {
+    const names = state.players.map((p) => p.name);
+    prefs.names = names.concat(prefs.names.filter((x) => !names.some((y) => y.toLowerCase() === x.toLowerCase()))).slice(0, 16);
+    write(PREFS_KEY, prefs);
+  }
+
+  /* ---------- Darstellung ---------- */
+
+  function render() {
+    const view = !state.started ? "setup" : state.editing != null ? "game" : state.finished ? "end" : "game";
+    el.setupView.hidden = view !== "setup";
+    el.gameView.hidden = view !== "game";
+    el.endView.hidden = view !== "end";
+    el.undoBtn.disabled = undoStack.length === 0;
+    el.tableBtn.disabled = !state.rounds.length;
+    el.finishBtn.hidden = !state.started || state.finished;
+    el.rematchBtn.hidden = !state.started;
+
+    if (view === "setup") renderSetup();
+    else if (view === "game") renderGame();
+    else renderEnd();
+    if (el.tableDialog.open) renderTable();
+  }
+
+  function renderSetup() {
+    el.subline.textContent = "Neues Spiel";
+    el.playerCount.textContent = n() ? `${n()} / ${MAX_PLAYERS}` : "";
+    el.setupPlayers.replaceChildren(...state.players.map((p, i) => {
+      const li = h("li", "setupPlayer");
+      const isDealer = i === state.dealerStart;
+      li.append(
+        h("span", "seat", String(i + 1)),
+        h("span", "setupPlayer__name", p.name),
+        btn(isDealer ? "chipBtn chipBtn--on" : "chipBtn", "Geber", () => commit(() => { state.dealerStart = i; }, false), { "aria-pressed": String(isDealer), title: "Gibt in Runde 1" }),
+        iconBtn("i-up", "Nach oben", () => movePlayer(p.id, -1), i === 0),
+        iconBtn("i-down", "Nach unten", () => movePlayer(p.id, 1), i === n() - 1),
+        iconBtn("i-close", `${p.name} entfernen`, () => removePlayer(p.id)),
+      );
+      return li;
+    }));
+    el.addName.disabled = n() >= MAX_PLAYERS;
+    el.addName.placeholder = n() >= MAX_PLAYERS ? "Alle Plätze belegt" : `Spieler ${n() + 1}`;
+
+    const recent = prefs.names.filter((x) => !state.players.some((p) => p.name.toLowerCase() === x.toLowerCase()));
+    el.nameSuggestions.replaceChildren(...recent.map((x) => { const o = document.createElement("option"); o.value = x; return o; }));
+    el.recentNames.replaceChildren(...(n() < MAX_PLAYERS ? recent.slice(0, 8) : []).map((x) => btn("chipBtn", `+ ${x}`, () => addPlayer(x))));
+
+    const mode = state.settings.mode, max = maxFor(state), auto = R.maxHand(Math.max(n(), 3));
+    for (const b of el.modeSeg.children) b.setAttribute("aria-checked", String(b.dataset.mode === mode));
+    const rounds = mode === "updown" ? max * 2 - 1 : max;
+    el.modeHint.textContent = mode === "manual"
+      ? "Kartenzahl jede Runde selbst wählen. Das Spiel endet über das Menü."
+      : mode === "updown"
+        ? `Bis ${max} Karten und wieder zurück – ${rounds} Runden.`
+        : `Jede Runde eine Karte mehr bis ${max} – ${rounds} Runden.`;
+    el.maxRow.hidden = mode === "manual";
+    el.maxValue.textContent = String(max);
+    el.maxHint.textContent = n() >= MIN_PLAYERS
+      ? (max === R.maxHand(n()) ? `Volles Spiel bei ${n()} Spielern (60 ÷ ${n()})` : `Kürzeres Spiel – voll wären ${R.maxHand(n())}`)
+      : `Bei 3 Spielern 20, bei 4 15, bei 5 12, bei 6 10`;
+    el.maxMinus.disabled = max <= 1;
+    el.maxPlus.disabled = max >= (n() ? R.maxHand(n()) : auto);
+    el.ruleNoEven.checked = state.settings.noEven;
+
+    const ok = n() >= MIN_PLAYERS;
+    el.primaryBtn.textContent = ok ? (n() === 2 ? "Spiel starten (Wizard ist für 3–6)" : "Spiel starten") : `Noch ${MIN_PLAYERS - n()} Spieler hinzufügen`;
+    el.primaryBtn.disabled = !ok;
+    el.primaryBtn.onclick = startGame;
+  }
+
+  function renderGame() {
+    const idx = entryIndex(), hand = entryHand(), total = totalRounds();
+    const editing = state.editing != null, manual = state.settings.mode === "manual";
+    const c = state.current, phase = state.phase;
+    const dealer = dealerOf(idx);
+
+    el.subline.textContent = total ? `Runde ${Math.min(idx + 1, total)} von ${total}` : `Runde ${idx + 1}`;
+    el.editBanner.hidden = !editing;
+    el.editText.textContent = `Runde ${idx + 1} bearbeiten`;
+
+    el.handValue.textContent = String(hand);
+    el.handLabel.textContent = hand === 1 ? "Karte" : "Karten";
+    el.handStepper.hidden = !(manual || editing);
+    el.handMinus.disabled = hand <= 1;
+    el.handPlus.disabled = hand >= R.maxHand(n());
+
+    el.roundTitle.textContent = total ? `Runde ${idx + 1} von ${total}` : `Runde ${idx + 1}`;
+    el.dealerLine.replaceChildren(svgIcon("i-deal"), document.createTextNode(` ${dealer.name} gibt · ${biddingOrder(idx)[0].name} beginnt`));
+    el.progress.hidden = !total;
+    if (total) el.progress.firstElementChild.style.width = `${Math.round((Math.min(state.rounds.length, total) / total) * 100)}%`;
+
+    // Summen: angesagt vs. Kartenzahl bzw. Stiche vs. Kartenzahl
+    if (phase === "bids") {
+      const b = sum(c.bids), d = b - hand;
+      const state_ = !Object.keys(c.bids).length ? "" : d > 0 ? `${d} überboten` : d < 0 ? `${-d} unterboten` : "geht genau auf";
+      el.sumLine.innerHTML = `Angesagt <b>${b}</b> von ${hand}${state_ ? ` · <span class="${d === 0 ? "warn" : ""}">${state_}</span>` : ""}`;
+    } else {
+      const t = sum(c.tricks), d = hand - t;
+      const msg = d > 0 ? `${d} offen` : d < 0 ? `<span class="bad">${-d} zu viel</span>` : `<span class="good">passt</span>`;
+      el.sumLine.innerHTML = `Stiche <b>${t}</b> von ${hand} · ${msg}`;
+    }
+
+    const bidsDone = allSet(c.bids);
+    el.phaseBids.setAttribute("aria-selected", String(phase === "bids"));
+    el.phaseTricks.setAttribute("aria-selected", String(phase === "tricks"));
+    el.phaseBids.classList.toggle("done", bidsDone);
+
+    const st = R.standings(state.players, state.rounds);
+    const rank = Object.fromEntries(st.map((p) => [p.id, p]));
+    const leaderTotal = st.length ? st[0].total : 0;
+    el.playerList.replaceChildren(...biddingOrder(idx).map((p) => playerCard(p, rank[p.id], leaderTotal, dealer.id === p.id, hand, phase)));
+
+    if (phase === "bids") {
+      el.primaryBtn.textContent = bidsDone ? "Weiter zu den Stichen" : `Noch ${state.players.filter((p) => !Number.isInteger(c.bids[p.id])).length} Ansage(n) offen`;
+      el.primaryBtn.disabled = !bidsDone;
+      el.primaryBtn.onclick = nextPhase;
+    } else {
+      const done = bidsDone && allSet(c.tricks);
+      const open = state.players.filter((p) => !Number.isInteger(c.tricks[p.id])).length;
+      el.primaryBtn.textContent = done ? (editing ? "Änderung speichern" : total && idx + 1 >= total ? "Letzte Runde speichern" : "Runde speichern")
+        : !bidsDone ? "Erst alle Ansagen eintragen" : `Noch ${open} Spieler offen`;
+      el.primaryBtn.disabled = !done;
+      el.primaryBtn.onclick = saveRound;
+    }
+  }
+
+  function playerCard(p, standing, leaderTotal, isDealer, hand, phase) {
+    const c = state.current;
+    const bid = c.bids[p.id], tr = c.tricks[p.id];
+    const card = h("article", "pCard");
+    card.dataset.pid = p.id;
+    const filled = Number.isInteger(phase === "bids" ? bid : tr);
+    card.classList.toggle("pCard--done", filled);
+
+    const head = h("div", "pCard__head");
+    const lead = standing.total === leaderTotal && state.rounds.length > 0;
+    const name = h("div", "pCard__name");
+    if (lead) name.append(svgIcon("i-crown", "crown"));
+    name.append(document.createTextNode(p.name));
+    if (isDealer) name.append(h("span", "tag", "Geber"));
+    const meta = h("div", "pCard__meta", `${standing.total} Punkte · Platz ${standing.rank}`);
+    const left = h("div", "pCard__left");
+    left.append(name, meta);
+    head.append(left);
+
+    if (phase === "tricks" && Number.isInteger(bid)) {
+      const right = h("div", "pCard__right");
+      right.append(h("div", "pCard__bid", `Ansage ${bid}`));
+      if (Number.isInteger(tr)) {
+        const s = R.score(bid, tr);
+        right.append(h("div", `pCard__pts ${s >= 0 ? "good" : "bad"}`, `${s > 0 ? "+" : s < 0 ? "−" : ""}${Math.abs(s)}`));
+      }
+      head.append(right);
+    }
+    card.append(head);
+
+    const kind = phase === "bids" ? "bids" : "tricks";
+    const chosen = kind === "bids" ? bid : tr;
+    const forbidden = kind === "bids" ? forbiddenFor(p.id) : null;
+    const chips = h("div", "chips");
+    chips.setAttribute("role", "radiogroup");
+    chips.setAttribute("aria-label", `${kind === "bids" ? "Ansage" : "Stiche"} ${p.name}`);
+    for (let v = 0; v <= hand; v++) {
+      const b = btn("chip", String(v), () => setValue(kind, p.id, v), { role: "radio", "aria-checked": String(chosen === v) });
+      if (kind === "tricks" && v === bid) b.classList.add("chip--target");
+      if (v === forbidden) {
+        b.disabled = true;
+        b.classList.add("chip--forbidden");
+        b.title = "Nicht erlaubt: Ansagen würden aufgehen";
+      }
+      chips.append(b);
+    }
+    card.append(chips);
+    return card;
+  }
+
+  function renderEnd() {
+    const st = R.standings(state.players, state.rounds);
+    const winners = st.filter((p) => p.rank === 1);
+    el.subline.textContent = `Spielende nach ${state.rounds.length} ${state.rounds.length === 1 ? "Runde" : "Runden"}`;
+    el.winnerName.textContent = winners.map((p) => p.name).join(" & ");
+    el.winnerScore.textContent = `${winners[0].total} Punkte${winners.length > 1 ? " · Gleichstand" : ""}`;
+    el.finalList.replaceChildren(...st.map((p) => {
+      const li = h("li", "finalRow");
+      const hits = state.rounds.filter((r) => r.bids[p.id] === r.tricks[p.id] && Number.isInteger(r.bids[p.id])).length;
+      li.append(h("span", "seat", String(p.rank)), h("span", "finalRow__name", p.name),
+        h("span", "finalRow__stat", `${hits}/${state.rounds.length} getroffen`), h("span", "finalRow__pts", String(p.total)));
+      return li;
+    }));
+    const total = totalRounds();
+    el.continueBtn.hidden = !(state.settings.mode === "manual" || (total && state.rounds.length < total));
+    el.primaryBtn.textContent = "Revanche";
+    el.primaryBtn.disabled = false;
+    el.primaryBtn.onclick = rematch;
+  }
+
+  function renderTable() {
+    const st = R.standings(state.players, state.rounds);
+    const rank = Object.fromEntries(st.map((p) => [p.id, p.rank]));
+    const t = h("table", "scoreTable");
+    const thead = h("thead");
+    const hr = h("tr");
+    hr.append(h("th", "rcol", "#"), ...state.players.map((p) => h("th", "", p.name)));
+    thead.append(hr);
+    const tbody = h("tbody");
+    const run = Object.fromEntries(state.players.map((p) => [p.id, 0]));
+    state.rounds.forEach((r, i) => {
+      const tr = h("tr", state.editing === i ? "editing" : "");
+      tr.tabIndex = 0;
+      tr.setAttribute("role", "button");
+      tr.setAttribute("aria-label", `Runde ${i + 1} bearbeiten`);
+      const go = () => { el.tableDialog.close(); startEdit(i); };
+      tr.addEventListener("click", go);
+      tr.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } });
+      const rc = h("td", "rcol");
+      rc.append(h("b", "", String(i + 1)), h("small", "", `${r.hand} K.`));
+      tr.append(rc);
+      for (const p of state.players) {
+        const b = r.bids[p.id], k = r.tricks[p.id];
+        const td = h("td");
+        if (Number.isInteger(b) && Number.isInteger(k)) {
+          const s = R.score(b, k);
+          run[p.id] += s;
+          td.append(h("b", "", String(run[p.id])), h("small", s >= 0 ? "good" : "bad", `${b}/${k} · ${s > 0 ? "+" : ""}${s}`));
+        } else td.textContent = "–";
+        tr.append(td);
+      }
+      tbody.append(tr);
+    });
+    const tfoot = h("tfoot");
+    const fr = h("tr");
+    fr.append(h("th", "rcol", "Σ"), ...state.players.map((p) => {
+      const th = h("th", rank[p.id] === 1 ? "lead" : "");
+      th.append(h("b", "", String(st.find((x) => x.id === p.id).total)), h("small", "", `Platz ${rank[p.id]}`));
+      return th;
+    }));
+    tfoot.append(fr);
+    t.append(thead, tbody, tfoot);
+    el.tableWrap.replaceChildren(t);
+  }
+
+  /* ---------- Rückmeldungen ---------- */
+
+  let toastTimer = 0;
+  function toast(text, withUndo = false) {
+    el.toastText.textContent = text;
+    el.toastUndo.hidden = !withUndo;
+    el.toast.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(hideToast, withUndo ? 5000 : 2600);
+  }
+  function hideToast() { el.toast.classList.remove("show"); }
+
+  function flash(pid) {
+    const card = el.playerList.querySelector(`[data-pid="${CSS.escape(pid)}"]`);
+    if (card) { card.classList.add("pCard--flash"); setTimeout(() => card.classList.remove("pCard--flash"), 700); }
+  }
+
+  /* Nach einer Auswahl die nächste offene Karte in den sichtbaren Bereich holen. */
+  function focusNext(kind, pid) {
+    if (!Number.isInteger(state.current[kind][pid])) return;
+    const order = biddingOrder(entryIndex());
+    const i = order.findIndex((p) => p.id === pid);
+    const next = order.slice(i + 1).concat(order.slice(0, i)).find((p) => !Number.isInteger(state.current[kind][p.id]));
+    if (!next) return;
+    const card = el.playerList.querySelector(`[data-pid="${CSS.escape(next.id)}"]`);
+    if (!card) return;
+    const r = card.getBoundingClientRect();
+    const bottom = window.innerHeight - el.primaryBtn.parentElement.offsetHeight;
+    if (r.bottom > bottom || r.top < 70) card.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  function haptic(p) { if (prefs.haptics && navigator.vibrate) try { navigator.vibrate(p); } catch (e) {} }
+
+  /* ---------- Einstellungen: Theme, Wake Lock ---------- */
+
+  const darkMq = matchMedia("(prefers-color-scheme: dark)");
+  function applyTheme() {
+    const dark = prefs.theme === "dark" || (prefs.theme === "system" && darkMq.matches);
+    if (dark) document.documentElement.dataset.theme = "dark";
+    else delete document.documentElement.dataset.theme;
+    document.querySelector('meta[name="theme-color"]').content = dark ? "#15131c" : "#f7f4ee";
+    for (const b of el.themeSeg.children) b.setAttribute("aria-checked", String(b.dataset.theme === prefs.theme));
+  }
+  darkMq.addEventListener("change", applyTheme);
+
+  let wakeLock = null;
+  async function requestWake() {
+    if (!prefs.wake || !state.started || !("wakeLock" in navigator) || document.visibilityState !== "visible" || wakeLock) return;
+    try {
+      wakeLock = await navigator.wakeLock.request("screen");
+      wakeLock.addEventListener("release", () => { wakeLock = null; });
+    } catch (e) { wakeLock = null; }
+  }
+  function releaseWake() { if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; } }
+  document.addEventListener("visibilitychange", requestWake);
+
+  /* ---------- Dialoge ---------- */
+
+  function openDialog(d) {
+    if (typeof d.showModal === "function") d.showModal(); else d.setAttribute("open", "");
+  }
+  for (const d of [el.tableDialog, el.menuDialog, el.ioDialog]) {
+    d.addEventListener("click", (e) => {
+      if (e.target === d || e.target.closest("[data-close]")) d.close();  // Klick auf den Hintergrund schließt
+    });
+  }
+
+  function openIO(mode) {
+    el.menuDialog.close();
+    el.ioTitle.textContent = mode === "export" ? "Export" : "Import";
+    el.ioText.value = mode === "export" ? JSON.stringify(exportable(), null, 2) : "";
+    el.ioText.readOnly = mode === "export";
+    el.ioText.placeholder = mode === "import" ? "Exportierten Spielstand hier einfügen" : "";
+    el.ioPrimary.textContent = mode === "export" ? "Kopieren" : "Importieren";
+    el.ioPrimary.onclick = mode === "export" ? copyExport : doImport;
+    openDialog(el.ioDialog);
+    if (mode === "export") el.ioText.select(); else el.ioText.focus();
+  }
+  function exportable() {
+    const { stash, editing, ...rest } = state;
+    const s = JSON.parse(JSON.stringify(rest));
+    if (state.editing != null) Object.assign(s, { current: { bids: stash.bids, tricks: stash.tricks, hand: stash.hand }, phase: stash.phase });
+    return s;
+  }
+  async function copyExport() {
+    try { await navigator.clipboard.writeText(el.ioText.value); el.ioPrimary.textContent = "Kopiert ✓"; }
+    catch (e) { el.ioText.select(); el.ioPrimary.textContent = "Markiert – jetzt kopieren"; }
+  }
+  function doImport() {
+    let parsed;
+    try { parsed = JSON.parse(el.ioText.value.trim()); } catch (e) { return toast("Kein gültiges JSON"); }
+    const s = normalize(parsed);
+    if (!s) return toast("Spielstand nicht erkannt");
+    commit(() => { state = s; });
+    el.ioDialog.close();
+    toast("Spielstand importiert", true);
+  }
+
+  /* ---------- Ereignisse ---------- */
+
+  el.undoBtn.addEventListener("click", undo);
+  el.toastUndo.addEventListener("click", undo);
+  el.tableBtn.addEventListener("click", () => { renderTable(); openDialog(el.tableDialog); });
+  el.showTableBtn.addEventListener("click", () => { renderTable(); openDialog(el.tableDialog); });
+  el.menuBtn.addEventListener("click", () => {
+    el.wakeToggle.checked = prefs.wake;
+    el.hapticToggle.checked = prefs.haptics;
+    applyTheme();
+    openDialog(el.menuDialog);
+  });
+
+  el.addForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    addPlayer(el.addName.value);
+    el.addName.value = "";
+    el.addName.focus();
+  });
+  el.modeSeg.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-mode]");
+    if (b) commit(() => { state.settings.mode = b.dataset.mode; }, false);
+  });
+  const stepMax = (d) => commit(() => {
+    const cap = R.maxHand(Math.max(n(), 1));
+    const v = Math.min(cap, Math.max(1, maxFor(state) + d));
+    state.settings.maxHand = v === R.maxHand(n()) ? null : v;
+  }, false);
+  el.maxMinus.addEventListener("click", () => stepMax(-1));
+  el.maxPlus.addEventListener("click", () => stepMax(1));
+  el.ruleNoEven.addEventListener("change", () => commit(() => { state.settings.noEven = el.ruleNoEven.checked; }, false));
+
+  const stepHand = (d) => commit(() => {
+    const c = state.current;
+    c.hand = Math.min(R.maxHand(n()), Math.max(1, c.hand + d));
+    for (const m of [c.bids, c.tricks]) for (const k of Object.keys(m)) if (m[k] > c.hand) delete m[k];
+  }, false);
+  el.handMinus.addEventListener("click", () => stepHand(-1));
+  el.handPlus.addEventListener("click", () => stepHand(1));
+
+  el.phaseBids.addEventListener("click", () => commit(() => { state.phase = "bids"; }, false));
+  el.phaseTricks.addEventListener("click", () => commit(() => { state.phase = "tricks"; }, false));
+  el.editCancel.addEventListener("click", () => commit(restoreStash, false));
+  el.continueBtn.addEventListener("click", () => commit(() => { state.finished = false; }));
+
+  el.rematchBtn.addEventListener("click", () => {
+    el.menuDialog.close();
+    if (state.rounds.length && !state.finished && !confirm("Laufendes Spiel verwerfen und mit denselben Spielern neu starten?")) return;
+    rematch();
+  });
+  el.finishBtn.addEventListener("click", () => { el.menuDialog.close(); finishGame(); });
+  el.newGameBtn.addEventListener("click", () => {
+    el.menuDialog.close();
+    if (state.rounds.length && !state.finished && !confirm("Laufendes Spiel verwerfen?")) return;
+    newGame();
+  });
+  el.themeSeg.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-theme]");
+    if (!b) return;
+    prefs.theme = b.dataset.theme;
+    write(PREFS_KEY, prefs);
+    applyTheme();
+  });
+  el.wakeToggle.addEventListener("change", () => {
+    prefs.wake = el.wakeToggle.checked;
+    write(PREFS_KEY, prefs);
+    if (prefs.wake) requestWake(); else releaseWake();
+  });
+  el.hapticToggle.addEventListener("change", () => { prefs.haptics = el.hapticToggle.checked; write(PREFS_KEY, prefs); });
+  el.exportBtn.addEventListener("click", () => openIO("export"));
+  el.importBtn.addEventListener("click", () => openIO("import"));
+
+  document.addEventListener("keydown", (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z" && !e.target.closest("input, textarea")) { e.preventDefault(); undo(); }
+  });
+
+  /* ---------- Hilfsfunktionen ---------- */
+
+  function h(tag, cls, text) {
+    const x = document.createElement(tag);
+    if (cls) x.className = cls;
+    if (text != null) x.textContent = text;
+    return x;
+  }
+  function btn(cls, text, onClick, attrs = {}) {
+    const b = h("button", cls, text);
+    b.type = "button";
+    b.addEventListener("click", onClick);
+    for (const [k, v] of Object.entries(attrs)) b.setAttribute(k, v);
+    return b;
+  }
+  function svgIcon(id, cls = "ico") {
+    const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    s.setAttribute("class", cls);
+    s.setAttribute("aria-hidden", "true");
+    const u = document.createElementNS("http://www.w3.org/2000/svg", "use");
+    u.setAttribute("href", `#${id}`);
+    s.append(u);
+    return s;
+  }
+  function iconBtn(icon, label, onClick, disabled = false) {
+    const b = btn("iconBtn iconBtn--flat iconBtn--small", null, onClick, { "aria-label": label, title: label });
+    b.append(svgIcon(icon));
+    b.disabled = disabled;
+    return b;
+  }
+  function clamp(v, min, max) {
+    const x = typeof v === "number" ? v : parseInt(v, 10);
+    return Number.isFinite(x) ? Math.min(max, Math.max(min, Math.trunc(x))) : null;
+  }
+  function uid() { return Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-4); }
+  function read(k) { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch (e) { return null; } }
+  function write(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+
+  /* ---------- Start ---------- */
+
+  applyTheme();
+  save();
+  render();
+  requestWake();
+
+  if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
+    window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {}));
+  }
+})();

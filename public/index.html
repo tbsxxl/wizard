@@ -2,167 +2,235 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Wizard – Score Tracker</title>
-  <meta name="theme-color" content="#0b1020">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <link rel="icon" type="image/png" href="./favicon.png" />
-  <link rel="apple-touch-icon" href="./favicon.png" />
-  <link rel="stylesheet" href="./styles.css" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Wizard – Punktezähler</title>
+  <meta name="description" content="Offline-fähiger Punktezähler für das Kartenspiel Wizard: Ansagen und Stiche antippen, Punkte, Geber und Rangliste werden automatisch geführt." />
+  <meta name="theme-color" content="#f7f4ee" />
+  <script>
+    // Theme vor dem ersten Rendern setzen (kein Aufblitzen). Standard: wie System.
+    try {
+      var t = (JSON.parse(localStorage.getItem("wizard_prefs_v1") || "{}") || {}).theme || "system";
+      if (t === "dark" || (t === "system" && matchMedia("(prefers-color-scheme: dark)").matches)) document.documentElement.dataset.theme = "dark";
+    } catch (e) {}
+  </script>
+
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Wizard" />
+  <meta property="og:title" content="Wizard – Punktezähler" />
+  <meta property="og:description" content="Ansagen und Stiche antippen, fertig: Punkte, Geber und Rangliste für das Kartenspiel Wizard." />
+  <meta property="og:image" content="/icons/icon-512.png" />
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180.png" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+
+  <link rel="stylesheet" href="/styles.css" />
+  <script src="/rules.js" defer></script>
+  <script src="/app.js" defer></script>
 </head>
+
 <body>
-  <div id="topbar">
-    <div id="titleRow">
-      
-      <div class="roundOrbMini" aria-hidden="true">
-        <div class="orbGlow"></div>
-        <div class="orbFace">
-          <div class="orbNum" id="orbRound">0</div>
-          <div class="orbText">Runde</div>
-        </div>
-      </div>
-<!-- Brand: abstract wand + suit pips (no copyrighted art) -->
-<div class="sigilWand"></div>
-        <div class="sigilPips">
-          <span class="pip p1"></span>
-          <span class="pip p2"></span>
-          <span class="pip p3"></span>
-          <span class="pip p4"></span>
-        </div>
-</div>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5" /><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" /></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" /></symbol>
+    <symbol id="i-table" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5" /><path d="M3 9.5h18M3 15h18M9.5 4v16" /></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18" /></symbol>
+    <symbol id="i-up" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6" /></symbol>
+    <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" /></symbol>
+    <symbol id="i-deal" viewBox="0 0 24 24"><rect x="8" y="3" width="11" height="15" rx="2" /><path d="M5 7.5v11a2 2 0 0 0 2 2h8" /></symbol>
+    <symbol id="i-crown" viewBox="0 0 24 24"><path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5z" /></symbol>
+    <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14" /></symbol>
+  </svg>
 
-      <div class="titleText">
-        <h1 class="brandTitle">Wizard</h1>
-        <div class="subtitle">Stichspiel · Score Tracker · Local‑First</div>
-        <div class="suitStrip" aria-hidden="true">
-          <span class="suitChip sRed"></span>
-          <span class="suitChip sGreen"></span>
-          <span class="suitChip sBlue"></span>
-          <span class="suitChip sGold"></span>
-          <span class="suitNote">Farben</span>
-        </div>
-      </div>
-
-      <div class="titleActions">
-        <button id="historyBtn" class="iconBtn" type="button" aria-label="Verlauf" aria-expanded="false">≡</button>
-        <button id="scoreBtn" class="iconBtn" type="button" aria-label="Scoreboard" aria-expanded="false">🏆</button>
-        <button id="toolsBtn" class="iconBtn" type="button" aria-label="Tools" aria-expanded="false">⋯</button>
+  <header class="topbar">
+    <div class="brand">
+      <img src="/icons/icon-180.png" alt="" width="40" height="40" class="brand__logo" />
+      <div class="brand__text">
+        <h1>Wizard</h1>
+        <p id="subline" class="brand__sub">Punktezähler</p>
       </div>
     </div>
+    <div class="topbar__actions">
+      <button id="undoBtn" class="iconBtn" type="button" aria-label="Rückgängig" title="Rückgängig" disabled>
+        <svg class="ico"><use href="#i-undo" /></svg>
+      </button>
+      <button id="tableBtn" class="iconBtn" type="button" aria-label="Punktetabelle" title="Punktetabelle">
+        <svg class="ico"><use href="#i-table" /></svg>
+      </button>
+      <button id="menuBtn" class="iconBtn" type="button" aria-label="Menü" title="Menü">
+        <svg class="ico"><use href="#i-menu" /></svg>
+      </button>
+    </div>
+  </header>
 
-    <div id="summaryStrip">
-      <div id="summaryLeft">
-        <div id="leaderLine">
-          <div id="leaderDot"></div>
-          <div id="leaderTextWrap">
-            <span id="leaderCrown">👑</span>
-            <span id="leaderName">Noch keine Spieler</span>
-            <span id="leaderScore"></span>
+  <main id="main">
+    <!-- Einrichtung -->
+    <section id="setupView" class="view" hidden>
+      <div class="card">
+        <div class="card__head">
+          <h2>Spieler</h2>
+          <span id="playerCount" class="muted"></span>
+        </div>
+        <p class="hint">In Sitzreihenfolge eintragen. Tippe auf <b>Geber</b>, wer zuerst gibt.</p>
+        <ol id="setupPlayers" class="setupPlayers"></ol>
+        <form id="addForm" class="addRow" autocomplete="off">
+          <input id="addName" type="text" placeholder="Name" maxlength="20" list="nameSuggestions" enterkeyhint="done" aria-label="Spielername" />
+          <datalist id="nameSuggestions"></datalist>
+          <button class="btn btn--primary btn--icon" type="submit" aria-label="Hinzufügen"><svg class="ico"><use href="#i-plus" /></svg></button>
+        </form>
+        <div id="recentNames" class="recentNames"></div>
+      </div>
+
+      <div class="card">
+        <h2>Spielart</h2>
+        <div class="segmented" role="radiogroup" aria-label="Spielart" id="modeSeg">
+          <button type="button" role="radio" data-mode="standard">1 → Max</button>
+          <button type="button" role="radio" data-mode="updown">Auf &amp; Ab</button>
+          <button type="button" role="radio" data-mode="manual">Frei</button>
+        </div>
+        <p id="modeHint" class="hint"></p>
+
+        <div id="maxRow" class="settingRow">
+          <div>
+            <div class="settingRow__title">Karten in der letzten Runde</div>
+            <div id="maxHint" class="hint hint--tight"></div>
+          </div>
+          <div class="stepper" aria-label="Maximale Kartenzahl">
+            <button type="button" id="maxMinus" aria-label="Weniger"><svg class="ico"><use href="#i-minus" /></svg></button>
+            <output id="maxValue">–</output>
+            <button type="button" id="maxPlus" aria-label="Mehr"><svg class="ico"><use href="#i-plus" /></svg></button>
           </div>
         </div>
-        <div id="subLine">
-          <span id="roundBadge" class="badge">Runde: 0</span>
-          <span id="handBadge" class="badge">Hand: –</span>
-          <span id="modeBadge" class="badge">Modus: –</span>
-</div>
+
+        <label class="settingRow switchRow">
+          <div>
+            <div class="settingRow__title">Ansagen dürfen nicht aufgehen</div>
+            <div class="hint hint--tight">Der Geber darf nicht so ansagen, dass die Summe der Ansagen der Kartenzahl entspricht.</div>
+          </div>
+          <input type="checkbox" id="ruleNoEven" class="switch" />
+        </label>
       </div>
-    </div>
 
-    <div id="historyPanel" aria-live="polite"></div>
-    <div id="scoreboardPanel" aria-live="polite"></div>
-  </div>
+      <p class="hint center">Wertung: richtig angesagt = <b>20 + 10 je Stich</b>, sonst <b>−10 je Stich Abweichung</b>.</p>
+    </section>
 
-  <div id="setupRow">
-    <div class="setupItem">
-      <div class="setupLabel">Modus</div>
-      <select id="modeSelect">
-        <option value="up">1 → Max</option>
-        <option value="updown">1 → Max → 1</option>
-        <option value="manual">Manuell (Handgröße pro Runde)</option>
-      </select>
-    </div>
-
-    <div class="setupItem">
-      <div class="setupLabel">Max (bei Auto)</div>
-      <input type="number" id="maxHandInput" min="1" step="1" inputmode="numeric" />
-    </div>
-
-    <div class="setupItem">
-      <div class="setupLabel">Start</div>
-      <button id="manageBtn" type="button">Spieler</button>
-    </div>
-  </div>
-
-  <div id="emptyState">Keine Spieler. Klicke auf <b>Spieler</b>, um ein Spiel anzulegen.</div>
-
-  <div id="playersContainer"></div>
-
-  <div id="bottomBar">
-    <button id="saveRoundBtn" type="button">Runde speichern</button>
-  </div>
-
-  <div id="toast">
-    <div class="tText">Runde gespeichert</div>
-    <button class="tBtn" id="undoBtn" type="button">Undo</button>
-  </div>
-
-  <!-- Tools menu -->
-  <div id="toolsMenu" role="menu" aria-label="Tools-Menü">
-    <button class="menuItem" id="newGameBtn" type="button" role="menuitem">Neues Spiel</button>
-    <div class="menuSep"></div>
-    <button class="menuItem" id="exportBtn" type="button" role="menuitem">Export (JSON)</button>
-    <button class="menuItem" id="importBtn" type="button" role="menuitem">Import (JSON)</button>
-  </div>
-
-  <!-- Player sheet -->
-  <div id="sheetOverlay"></div>
-  <div id="sheet" aria-hidden="true">
-    <div class="sheetHeader" id="sheetHeader">
-      <div class="sheetGrab"></div>
-      <div class="sheetHeadRow">
-        <div class="sheetTitle">Spieler verwalten</div>
-        <button class="sheetClose" id="sheetCloseBtn" type="button" aria-label="Schließen">✕</button>
+    <!-- Laufendes Spiel -->
+    <section id="gameView" class="view" hidden>
+      <div id="editBanner" class="banner" hidden>
+        <span id="editText">Runde bearbeiten</span>
+        <button id="editCancel" class="btn btn--ghost btn--small" type="button">Abbrechen</button>
       </div>
-      <div class="sheetDivider"></div>
-    </div>
 
-    <div class="sheetBody">
-      <div class="sheetSection">
-        <h4>Spieler</h4>
-        <div id="sheetPlayersList"></div>
-        <div class="row" id="addRow">
-          <input id="addName" type="text" placeholder="Spielername" autocomplete="off" />
-          <button id="addBtn" type="button">Hinzufügen</button>
+      <div class="roundCard">
+        <div class="roundCard__hand">
+          <div id="handValue" class="roundCard__num">1</div>
+          <div id="handLabel" class="roundCard__label">Karte</div>
+          <div id="handStepper" class="stepper stepper--small" hidden>
+            <button type="button" id="handMinus" aria-label="Weniger Karten"><svg class="ico"><use href="#i-minus" /></svg></button>
+            <button type="button" id="handPlus" aria-label="Mehr Karten"><svg class="ico"><use href="#i-plus" /></svg></button>
+          </div>
         </div>
-        <div class="hint">Hinweis: Spieleränderungen sind nach der ersten gespeicherten Runde gesperrt.</div>
-      </div>
-
-      <div class="sheetSection">
-        <h4>Wertung</h4>
-        <div class="hint">
-          Standard: exakt getroffen = <b>20 + 10×Stiche</b>, sonst <b>−10×Abweichung</b>.
+        <div class="roundCard__info">
+          <div id="roundTitle" class="roundCard__title">Runde 1</div>
+          <div id="dealerLine" class="roundCard__meta"></div>
+          <div id="progress" class="progress" aria-hidden="true"><span></span></div>
+          <div id="sumLine" class="sumLine"></div>
         </div>
       </div>
 
-      <div style="height:14px"></div>
-    </div>
+      <div class="segmented segmented--phase" role="tablist" aria-label="Eingabe">
+        <button type="button" role="tab" id="phaseBids" data-phase="bids">1 · Ansagen</button>
+        <button type="button" role="tab" id="phaseTricks" data-phase="tricks">2 · Stiche</button>
+      </div>
+
+      <div id="playerList" class="playerList"></div>
+    </section>
+
+    <!-- Spielende -->
+    <section id="endView" class="view" hidden>
+      <div class="endCard">
+        <svg class="endCard__crown"><use href="#i-crown" /></svg>
+        <div class="endCard__label">Gewonnen</div>
+        <div id="winnerName" class="endCard__name"></div>
+        <div id="winnerScore" class="endCard__score"></div>
+      </div>
+      <ol id="finalList" class="finalList"></ol>
+      <div class="endActions">
+        <button id="showTableBtn" class="btn" type="button">Punktetabelle</button>
+        <button id="continueBtn" class="btn" type="button" hidden>Weiterspielen</button>
+      </div>
+    </section>
+  </main>
+
+  <footer class="bottombar">
+    <button id="primaryBtn" class="btn btn--primary btn--big" type="button">Spiel starten</button>
+  </footer>
+
+  <div id="toast" class="toast" role="status" aria-live="polite">
+    <span id="toastText"></span>
+    <button id="toastUndo" class="toast__btn" type="button">Rückgängig</button>
   </div>
 
-  <!-- Import/Export dialog -->
-  <div class="overlay" id="dialogOverlay"></div>
-  <div class="dialog" id="dialog">
-    <div class="dialogHead">
-      <div class="dialogTitle" id="dialogTitle">Export</div>
-      <button class="dialogClose" id="dialogCloseBtn" type="button" aria-label="Schließen">✕</button>
+  <!-- Punktetabelle -->
+  <dialog id="tableDialog" class="sheet sheet--wide" aria-labelledby="tableTitle">
+    <div class="sheet__head">
+      <h2 id="tableTitle">Punktetabelle</h2>
+      <button class="iconBtn iconBtn--flat" type="button" data-close aria-label="Schließen"><svg class="ico"><use href="#i-close" /></svg></button>
     </div>
-    <textarea id="dialogText" spellcheck="false"></textarea>
-    <div class="dialogActions">
-      <button id="dialogPrimaryBtn" type="button">Kopieren</button>
-      <button id="dialogSecondaryBtn" type="button">Schließen</button>
-    </div>
-  </div>
+    <div id="tableWrap" class="tableWrap"></div>
+    <p class="hint">Runde antippen, um sie zu korrigieren. Kleine Zahlen: Ansage/Stiche.</p>
+  </dialog>
 
-  <script src="./app.js"></script>
+  <!-- Menü -->
+  <dialog id="menuDialog" class="sheet" aria-labelledby="menuTitle">
+    <div class="sheet__head">
+      <h2 id="menuTitle">Menü</h2>
+      <button class="iconBtn iconBtn--flat" type="button" data-close aria-label="Schließen"><svg class="ico"><use href="#i-close" /></svg></button>
+    </div>
+    <div class="menuList">
+      <button class="menuItem" id="rematchBtn" type="button">Revanche <span class="muted">gleiche Spieler, neu starten</span></button>
+      <button class="menuItem" id="finishBtn" type="button">Spiel beenden <span class="muted">Endstand anzeigen</span></button>
+      <button class="menuItem" id="newGameBtn" type="button">Neues Spiel <span class="muted">Spieler &amp; Spielart neu wählen</span></button>
+    </div>
+    <div class="menuGroup">
+      <div class="menuGroup__title">Darstellung</div>
+      <div class="segmented" role="radiogroup" aria-label="Darstellung" id="themeSeg">
+        <button type="button" role="radio" data-theme="system">Auto</button>
+        <button type="button" role="radio" data-theme="light">Hell</button>
+        <button type="button" role="radio" data-theme="dark">Dunkel</button>
+      </div>
+      <label class="settingRow switchRow">
+        <div class="settingRow__title">Bildschirm anlassen</div>
+        <input type="checkbox" id="wakeToggle" class="switch" />
+      </label>
+      <label class="settingRow switchRow">
+        <div class="settingRow__title">Vibration</div>
+        <input type="checkbox" id="hapticToggle" class="switch" />
+      </label>
+    </div>
+    <div class="menuGroup">
+      <div class="menuGroup__title">Daten</div>
+      <div class="menuList">
+        <button class="menuItem" id="exportBtn" type="button">Export <span class="muted">Spielstand als JSON</span></button>
+        <button class="menuItem" id="importBtn" type="button">Import <span class="muted">JSON einfügen</span></button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Import / Export -->
+  <dialog id="ioDialog" class="sheet" aria-labelledby="ioTitle">
+    <div class="sheet__head">
+      <h2 id="ioTitle">Export</h2>
+      <button class="iconBtn iconBtn--flat" type="button" data-close aria-label="Schließen"><svg class="ico"><use href="#i-close" /></svg></button>
+    </div>
+    <textarea id="ioText" spellcheck="false" aria-label="JSON"></textarea>
+    <div class="sheet__actions">
+      <button id="ioSecondary" class="btn" type="button" data-close>Schließen</button>
+      <button id="ioPrimary" class="btn btn--primary" type="button">Kopieren</button>
+    </div>
+  </dialog>
 </body>
 </html>
