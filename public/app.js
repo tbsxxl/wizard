@@ -32,13 +32,19 @@
     themeSeg: $("themeSeg"), wakeToggle: $("wakeToggle"), hapticToggle: $("hapticToggle"),
     exportBtn: $("exportBtn"), importBtn: $("importBtn"),
     ioDialog: $("ioDialog"), ioTitle: $("ioTitle"), ioText: $("ioText"), ioPrimary: $("ioPrimary"),
+    randomDealer: $("randomDealer"),
+    confirmDialog: $("confirmDialog"), confirmTitle: $("confirmTitle"), confirmText: $("confirmText"),
+    confirmNo: $("confirmNo"), confirmYes: $("confirmYes"),
   };
 
   /* ---------- Zustand ---------- */
 
   const prefs = Object.assign({ theme: "system", wake: true, haptics: true, names: [] }, read(PREFS_KEY) || {});
   let state = loadState();
-  let undoStack = (read(UNDO_KEY) || []).filter((s) => typeof s === "string").slice(-UNDO_LIMIT);
+  let undoStack = (read(UNDO_KEY) || [])
+    .map((e) => (typeof e === "string" ? { s: e, label: "" } : e))
+    .filter((e) => e && typeof e.s === "string")
+    .slice(-UNDO_LIMIT);
 
   function freshState(players = []) {
     return {
@@ -123,10 +129,10 @@
     write(UNDO_KEY, undoStack);
   }
 
-  /* Jede Änderung mit Rückgängig-Schritt läuft hierüber. */
-  function commit(fn, undoable = true) {
-    if (undoable) {
-      undoStack.push(JSON.stringify(state));
+  /* Jede Änderung läuft hierüber. undo: false = ohne Rückgängig-Schritt, Text = Beschriftung des Schritts. */
+  function commit(fn, undo = "") {
+    if (undo !== false) {
+      undoStack.push({ s: JSON.stringify(state), label: undo || "" });
       if (undoStack.length > UNDO_LIMIT) undoStack.shift();
     }
     fn();
@@ -137,10 +143,10 @@
   function undo() {
     const prev = undoStack.pop();
     if (!prev) return;
-    state = normalize(JSON.parse(prev)) || state;
-    hideToast();
+    state = normalize(JSON.parse(prev.s)) || state;
     save();
     render();
+    toast(prev.label ? `Rückgängig: ${prev.label}` : "Rückgängig gemacht");
     haptic(15);
   }
 
@@ -184,21 +190,37 @@
 
   /* ---------- Aktionen ---------- */
 
+  const findDup = (name, exceptId) => state.players.find((p) => p.id !== exceptId && p.name.toLowerCase() === name.toLowerCase());
+  const cleanName = (name) => String(name || "").trim().replace(/\s+/g, " ").slice(0, 20);
+
   function addPlayer(name) {
-    name = String(name || "").trim().replace(/\s+/g, " ").slice(0, 20);
+    name = cleanName(name);
     if (!name || state.started) return;
     if (n() >= MAX_PLAYERS) return toast(`Höchstens ${MAX_PLAYERS} Spieler`);
-    if (state.players.some((p) => p.name.toLowerCase() === name.toLowerCase())) return toast(`„${name}" ist schon dabei`);
+    if (findDup(name)) return toast(`„${name}" ist schon dabei`);
     commit(() => { state.players.push({ id: uid(), name }); }, false);
   }
 
+  function renamePlayer(id, name) {
+    name = cleanName(name);
+    const p = state.players.find((x) => x.id === id);
+    if (!p || name === p.name) return;
+    if (!name || findDup(name, id)) {
+      if (name) toast(`„${name}" ist schon dabei`);
+      return render();
+    }
+    commit(() => { p.name = name; }, `${p.name} umbenannt`);
+  }
+
   function removePlayer(id) {
+    const p = state.players.find((x) => x.id === id);
     commit(() => {
-      const i = state.players.findIndex((p) => p.id === id);
+      const i = state.players.indexOf(p);
       state.players.splice(i, 1);
       if (state.dealerStart >= n()) state.dealerStart = 0;
       else if (i < state.dealerStart) state.dealerStart--;
-    });
+    }, `${p.name} entfernt`);
+    toast(`${p.name} entfernt`, true);
   }
 
   function movePlayer(id, dir) {
@@ -211,6 +233,14 @@
     }, false);
   }
 
+  function drawDealer() {
+    if (n() < 2) return;
+    const i = Math.floor(Math.random() * n());
+    commit(() => { state.dealerStart = i; }, false);
+    haptic([8, 30, 8]);
+    toast(`${state.players[i].name} gibt zuerst`);
+  }
+
   function startGame() {
     if (n() < MIN_PLAYERS) return;
     rememberNames();
@@ -220,14 +250,15 @@
       state.rounds = [];
       state.current = emptyDraft(1);
       state.phase = "bids";
-    });
+    }, "Spielstart");
     requestWake();
   }
 
   function setValue(kind, pid, v) {
     const m = state.current[kind];
-    m[pid] = m[pid] === v ? undefined : v;  // erneutes Antippen hebt die Auswahl auf
-    if (m[pid] === undefined) delete m[pid];
+    const wasComplete = allSet(m);
+    if (m[pid] === v) delete m[pid];  // erneutes Antippen hebt die Auswahl auf
+    else m[pid] = v;
     haptic(8);
     let autoFilled = null;
     if (kind === "tricks" && m[pid] !== undefined) {
@@ -236,22 +267,39 @@
       const rest = entryHand() - sum(m);
       if (open.length === 1 && rest >= 0) { m[open[0].id] = rest; autoFilled = open[0].id; }
     }
+    // Alle Ansagen da → automatisch weiter zu den Stichen (nur beim Abschluss, nicht beim Korrigieren)
+    const autoAdvance = kind === "bids" && !wasComplete && allSet(m) && state.editing == null;
     commit(() => {}, false);
     if (autoFilled) flash(autoFilled);
     else focusNext(kind, pid);
+    if (autoAdvance) {
+      clearTimeout(advanceTimer);
+      advanceTimer = setTimeout(() => {
+        if (state.phase !== "bids" || !allSet(state.current.bids)) return;
+        commit(() => { state.phase = "tricks"; }, false);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        toast("Ansagen komplett – nach der Runde Stiche eintragen");
+      }, 650);
+    }
   }
+  let advanceTimer = 0;
 
   function nextPhase() {
     if (!allSet(state.current.bids)) return;
+    clearTimeout(advanceTimer);
     commit(() => { state.phase = "tricks"; }, false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  function saveRound() {
+  async function saveRound() {
     const c = state.current, hand = entryHand();
     if (!allSet(c.bids) || !allSet(c.tricks)) return;
     const t = sum(c.tricks);
-    if (t !== hand && !confirm(`Es wurden ${t} Stiche eingetragen, aber ${hand} ${hand === 1 ? "Karte" : "Karten"} gespielt. Trotzdem speichern?`)) return;
+    if (t !== hand && !(await ask({
+      title: "Stiche passen nicht",
+      text: `Eingetragen sind ${t} Stiche, gespielt wurden ${hand} ${hand === 1 ? "Karte" : "Karten"}. Trotzdem speichern?`,
+      yes: "Trotzdem speichern",
+    }))) return;
 
     const round = { hand, bids: { ...c.bids }, tricks: { ...c.tricks }, at: Date.now() };
     if (state.editing != null) {
@@ -260,19 +308,20 @@
         round.at = state.rounds[idx].at;
         state.rounds[idx] = round;
         restoreStash();
-      });
+      }, `Runde ${idx + 1} korrigiert`);
       toast(`Runde ${idx + 1} korrigiert`, true);
       return;
     }
+    const no = state.rounds.length + 1;
     commit(() => {
       state.rounds.push(round);
       const total = totalRounds();
       if (total && state.rounds.length >= total) state.finished = true;
       state.current = emptyDraft(nextManualHand(state));
       state.phase = "bids";
-    });
+    }, `Runde ${no} gespeichert`);
     haptic([10, 40, 10]);
-    toast(state.finished ? "Letzte Runde gespeichert" : `Runde ${state.rounds.length} gespeichert`, true);
+    toast(state.finished ? "Letzte Runde gespeichert" : `Runde ${no} gespeichert`, true);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -296,9 +345,15 @@
     state.stash = null;
   }
 
-  function finishGame() {
+  async function finishGame() {
     if (!state.rounds.length) return toast("Noch keine Runde gespielt");
-    commit(() => { if (state.editing != null) restoreStash(); state.finished = true; });
+    const total = totalRounds();
+    if (total && state.rounds.length < total && !(await ask({
+      title: "Spiel vorzeitig beenden?",
+      text: `${state.rounds.length} von ${total} Runden gespielt. Du kannst danach weiterspielen.`,
+      yes: "Beenden",
+    }))) return;
+    commit(() => { if (state.editing != null) restoreStash(); state.finished = true; }, "Spiel beendet");
   }
 
   function rematch() {
@@ -310,8 +365,8 @@
       state.settings = keep.settings;
       state.dealerStart = next;
       state.started = true;
-    });
-    toast("Neues Spiel – Geber rückt weiter", true);
+    }, "Revanche");
+    toast(`Revanche – ${dealerOf(0).name} gibt`, true);
   }
 
   function newGame() {
@@ -320,13 +375,30 @@
       state = freshState(keep.players);
       state.settings = keep.settings;
       state.dealerStart = keep.dealerStart;
-    });
+    }, "Neues Spiel");
   }
 
   function rememberNames() {
     const names = state.players.map((p) => p.name);
     prefs.names = names.concat(prefs.names.filter((x) => !names.some((y) => y.toLowerCase() === x.toLowerCase()))).slice(0, 16);
     write(PREFS_KEY, prefs);
+  }
+
+  /* Eigener Bestätigungsdialog statt confirm(). */
+  function ask({ title, text, yes = "OK", danger = false }) {
+    return new Promise((resolve) => {
+      const d = el.confirmDialog;
+      el.confirmTitle.textContent = title;
+      el.confirmText.textContent = text;
+      el.confirmYes.textContent = yes;
+      el.confirmYes.classList.toggle("btn--danger", danger);
+      const done = (v) => { d.onclose = null; if (d.open) d.close(); resolve(v); };
+      el.confirmYes.onclick = () => done(true);
+      el.confirmNo.onclick = () => done(false);
+      d.onclose = () => done(false);
+      openDialog(d);
+      el.confirmYes.focus();
+    });
   }
 
   /* ---------- Darstellung ---------- */
@@ -349,13 +421,22 @@
 
   function renderSetup() {
     el.subline.textContent = "Neues Spiel";
-    el.playerCount.textContent = n() ? `${n()} / ${MAX_PLAYERS}` : "";
+    el.playerCount.textContent = n() ? `${n()}/${MAX_PLAYERS}` : "";
+    el.randomDealer.hidden = n() < 2;
     el.setupPlayers.replaceChildren(...state.players.map((p, i) => {
       const li = h("li", "setupPlayer");
       const isDealer = i === state.dealerStart;
+      const name = document.createElement("input");
+      name.className = "setupPlayer__name";
+      name.value = p.name;
+      name.maxLength = 20;
+      name.enterKeyHint = "done";
+      name.setAttribute("aria-label", `Name von Spieler ${i + 1}`);
+      name.addEventListener("change", () => renamePlayer(p.id, name.value));
+      name.addEventListener("keydown", (e) => { if (e.key === "Enter") name.blur(); });
       li.append(
         h("span", "seat", String(i + 1)),
-        h("span", "setupPlayer__name", p.name),
+        name,
         btn(isDealer ? "chipBtn chipBtn--on" : "chipBtn", "Geber", () => commit(() => { state.dealerStart = i; }, false), { "aria-pressed": String(isDealer), title: "Gibt in Runde 1" }),
         iconBtn("i-up", "Nach oben", () => movePlayer(p.id, -1), i === 0),
         iconBtn("i-down", "Nach unten", () => movePlayer(p.id, 1), i === n() - 1),
@@ -363,6 +444,7 @@
       );
       return li;
     }));
+    if (!n()) el.setupPlayers.append(h("li", "emptyHint", "Noch niemand dabei – Namen unten eintragen."));
     el.addName.disabled = n() >= MAX_PLAYERS;
     el.addName.placeholder = n() >= MAX_PLAYERS ? "Alle Plätze belegt" : `Spieler ${n() + 1}`;
 
@@ -399,7 +481,7 @@
     const c = state.current, phase = state.phase;
     const dealer = dealerOf(idx);
 
-    el.subline.textContent = total ? `Runde ${Math.min(idx + 1, total)} von ${total}` : `Runde ${idx + 1}`;
+    el.subline.textContent = leaderText();
     el.editBanner.hidden = !editing;
     el.editText.textContent = `Runde ${idx + 1} bearbeiten`;
 
@@ -410,15 +492,18 @@
     el.handPlus.disabled = hand >= R.maxHand(n());
 
     el.roundTitle.textContent = total ? `Runde ${idx + 1} von ${total}` : `Runde ${idx + 1}`;
-    el.dealerLine.replaceChildren(svgIcon("i-deal"), document.createTextNode(` ${dealer.name} gibt · ${biddingOrder(idx)[0].name} beginnt`));
+    el.dealerLine.replaceChildren(svgIcon("i-deal"), document.createTextNode(` ${dealer.name} gibt · ${biddingOrder(idx)[0].name} ${phase === "bids" ? "sagt zuerst an" : "spielt aus"}`));
     el.progress.hidden = !total;
     if (total) el.progress.firstElementChild.style.width = `${Math.round((Math.min(state.rounds.length, total) / total) * 100)}%`;
 
     // Summen: angesagt vs. Kartenzahl bzw. Stiche vs. Kartenzahl
     if (phase === "bids") {
-      const b = sum(c.bids), d = b - hand;
-      const state_ = !Object.keys(c.bids).length ? "" : d > 0 ? `${d} überboten` : d < 0 ? `${-d} unterboten` : "geht genau auf";
-      el.sumLine.innerHTML = `Angesagt <b>${b}</b> von ${hand}${state_ ? ` · <span class="${d === 0 ? "warn" : ""}">${state_}</span>` : ""}`;
+      // Über-/unterboten erst bewerten, wenn alle angesagt haben (vorher ist nur „überboten" sicher)
+      const b = sum(c.bids), d = b - hand, complete = allSet(c.bids);
+      const msg = complete
+        ? (d > 0 ? `${d} überboten` : d < 0 ? `${-d} unterboten` : `<span class="warn">geht genau auf</span>`)
+        : d > 0 ? `schon ${d} überboten` : "";
+      el.sumLine.innerHTML = `Angesagt <b>${b}</b> von ${hand}${msg ? ` · ${msg}` : ""}`;
     } else {
       const t = sum(c.tricks), d = hand - t;
       const msg = d > 0 ? `${d} offen` : d < 0 ? `<span class="bad">${-d} zu viel</span>` : `<span class="good">passt</span>`;
@@ -433,7 +518,10 @@
     const st = R.standings(state.players, state.rounds);
     const rank = Object.fromEntries(st.map((p) => [p.id, p]));
     const leaderTotal = st.length ? st[0].total : 0;
-    el.playerList.replaceChildren(...biddingOrder(idx).map((p) => playerCard(p, rank[p.id], leaderTotal, dealer.id === p.id, hand, phase)));
+    const order = biddingOrder(idx);
+    const turn = order.find((p) => !Number.isInteger(c[phase][p.id]));
+    const last = editing ? null : state.rounds[state.rounds.length - 1];
+    el.playerList.replaceChildren(...order.map((p) => playerCard(p, rank[p.id], leaderTotal, dealer.id === p.id, hand, phase, turn && turn.id === p.id, last)));
 
     if (phase === "bids") {
       el.primaryBtn.textContent = bidsDone ? "Weiter zu den Stichen" : `Noch ${state.players.filter((p) => !Number.isInteger(c.bids[p.id])).length} Ansage(n) offen`;
@@ -449,13 +537,14 @@
     }
   }
 
-  function playerCard(p, standing, leaderTotal, isDealer, hand, phase) {
+  function playerCard(p, standing, leaderTotal, isDealer, hand, phase, isTurn, lastRound) {
     const c = state.current;
     const bid = c.bids[p.id], tr = c.tricks[p.id];
     const card = h("article", "pCard");
     card.dataset.pid = p.id;
     const filled = Number.isInteger(phase === "bids" ? bid : tr);
     card.classList.toggle("pCard--done", filled);
+    card.classList.toggle("pCard--turn", !!isTurn);
 
     const head = h("div", "pCard__head");
     const lead = standing.total === leaderTotal && state.rounds.length > 0;
@@ -463,7 +552,12 @@
     if (lead) name.append(svgIcon("i-crown", "crown"));
     name.append(document.createTextNode(p.name));
     if (isDealer) name.append(h("span", "tag", "Geber"));
-    const meta = h("div", "pCard__meta", `${standing.total} Punkte · Platz ${standing.rank}`);
+    if (isTurn) name.append(h("span", "tag tag--turn", "dran"));
+    const meta = h("div", "pCard__meta", `${standing.total} P · Platz ${standing.rank}`);
+    if (lastRound && Number.isInteger(lastRound.bids[p.id]) && Number.isInteger(lastRound.tricks[p.id])) {
+      const ls = R.score(lastRound.bids[p.id], lastRound.tricks[p.id]);
+      meta.append(document.createTextNode(" · zuletzt "), h("span", ls >= 0 ? "good" : "bad", fmtDelta(ls)));
+    }
     const left = h("div", "pCard__left");
     left.append(name, meta);
     head.append(left);
@@ -473,7 +567,7 @@
       right.append(h("div", "pCard__bid", `Ansage ${bid}`));
       if (Number.isInteger(tr)) {
         const s = R.score(bid, tr);
-        right.append(h("div", `pCard__pts ${s >= 0 ? "good" : "bad"}`, `${s > 0 ? "+" : s < 0 ? "−" : ""}${Math.abs(s)}`));
+        right.append(h("div", `pCard__pts ${s >= 0 ? "good" : "bad"}`, fmtDelta(s)));
       }
       head.append(right);
     }
@@ -504,12 +598,15 @@
     const winners = st.filter((p) => p.rank === 1);
     el.subline.textContent = `Spielende nach ${state.rounds.length} ${state.rounds.length === 1 ? "Runde" : "Runden"}`;
     el.winnerName.textContent = winners.map((p) => p.name).join(" & ");
-    el.winnerScore.textContent = `${winners[0].total} Punkte${winners.length > 1 ? " · Gleichstand" : ""}`;
+    el.winnerScore.textContent = `${fmtNum(winners[0].total)} Punkte${winners.length > 1 ? " · Gleichstand" : ""}`;
     el.finalList.replaceChildren(...st.map((p) => {
       const li = h("li", "finalRow");
-      const hits = state.rounds.filter((r) => r.bids[p.id] === r.tricks[p.id] && Number.isInteger(r.bids[p.id])).length;
-      li.append(h("span", "seat", String(p.rank)), h("span", "finalRow__name", p.name),
-        h("span", "finalRow__stat", `${hits}/${state.rounds.length} getroffen`), h("span", "finalRow__pts", String(p.total)));
+      const played = state.rounds.filter((r) => Number.isInteger(r.bids[p.id]) && Number.isInteger(r.tricks[p.id]));
+      const hits = played.filter((r) => r.bids[p.id] === r.tricks[p.id]).length;
+      const best = played.length ? Math.max(...played.map((r) => R.score(r.bids[p.id], r.tricks[p.id]))) : 0;
+      const info = h("span", "finalRow__info");
+      info.append(h("span", "finalRow__name", p.name), h("span", "finalRow__stat", `${hits} von ${played.length} getroffen · beste Runde ${fmtDelta(best)}`));
+      li.append(h("span", "seat", String(p.rank)), info, h("span", "finalRow__pts", fmtNum(p.total)));
       return li;
     }));
     const total = totalRounds();
@@ -546,7 +643,7 @@
         if (Number.isInteger(b) && Number.isInteger(k)) {
           const s = R.score(b, k);
           run[p.id] += s;
-          td.append(h("b", "", String(run[p.id])), h("small", s >= 0 ? "good" : "bad", `${b}/${k} · ${s > 0 ? "+" : ""}${s}`));
+          td.append(h("b", "", fmtNum(run[p.id])), h("small", s >= 0 ? "good" : "bad", `${b}/${k} · ${fmtDelta(s)}`));
         } else td.textContent = "–";
         tr.append(td);
       }
@@ -556,12 +653,24 @@
     const fr = h("tr");
     fr.append(h("th", "rcol", "Σ"), ...state.players.map((p) => {
       const th = h("th", rank[p.id] === 1 ? "lead" : "");
-      th.append(h("b", "", String(st.find((x) => x.id === p.id).total)), h("small", "", `Platz ${rank[p.id]}`));
+      th.append(h("b", "", fmtNum(st.find((x) => x.id === p.id).total)), h("small", "", `Platz ${rank[p.id]}`));
       return th;
     }));
     tfoot.append(fr);
     t.append(thead, tbody, tfoot);
     el.tableWrap.replaceChildren(t);
+  }
+
+  const fmtDelta = (v) => `${v > 0 ? "+" : v < 0 ? "−" : "±"}${Math.abs(v)}`;
+  const fmtNum = (v) => (v < 0 ? `−${-v}` : String(v));
+
+  function leaderText() {
+    if (!state.rounds.length) return `${n()} Spieler · ${state.settings.mode === "updown" ? "Auf & Ab" : state.settings.mode === "manual" ? "freie Kartenzahl" : "1 → " + maxFor(state)}`;
+    const st = R.standings(state.players, state.rounds);
+    const top = st.filter((p) => p.rank === 1);
+    if (top.length > 1) return `Gleichstand: ${top.map((p) => p.name).join(", ")} · ${fmtNum(top[0].total)}`;
+    const gap = st[1] ? top[0].total - st[1].total : 0;
+    return `${top[0].name} führt · ${fmtNum(top[0].total)} P${gap ? ` (+${gap})` : ""}`;
   }
 
   /* ---------- Rückmeldungen ---------- */
@@ -625,7 +734,7 @@
   function openDialog(d) {
     if (typeof d.showModal === "function") d.showModal(); else d.setAttribute("open", "");
   }
-  for (const d of [el.tableDialog, el.menuDialog, el.ioDialog]) {
+  for (const d of [el.tableDialog, el.menuDialog, el.ioDialog, el.confirmDialog]) {
     d.addEventListener("click", (e) => {
       if (e.target === d || e.target.closest("[data-close]")) d.close();  // Klick auf den Hintergrund schließt
     });
@@ -707,17 +816,18 @@
   el.editCancel.addEventListener("click", () => commit(restoreStash, false));
   el.continueBtn.addEventListener("click", () => commit(() => { state.finished = false; }));
 
-  el.rematchBtn.addEventListener("click", () => {
+  el.rematchBtn.addEventListener("click", async () => {
     el.menuDialog.close();
-    if (state.rounds.length && !state.finished && !confirm("Laufendes Spiel verwerfen und mit denselben Spielern neu starten?")) return;
+    if (state.rounds.length && !state.finished && !(await ask({ title: "Revanche starten?", text: "Das laufende Spiel wird verworfen (lässt sich rückgängig machen).", yes: "Revanche", danger: true }))) return;
     rematch();
   });
   el.finishBtn.addEventListener("click", () => { el.menuDialog.close(); finishGame(); });
-  el.newGameBtn.addEventListener("click", () => {
+  el.newGameBtn.addEventListener("click", async () => {
     el.menuDialog.close();
-    if (state.rounds.length && !state.finished && !confirm("Laufendes Spiel verwerfen?")) return;
+    if (state.rounds.length && !state.finished && !(await ask({ title: "Neues Spiel?", text: "Das laufende Spiel wird verworfen (lässt sich rückgängig machen).", yes: "Neues Spiel", danger: true }))) return;
     newGame();
   });
+  el.randomDealer.addEventListener("click", drawDealer);
   el.themeSeg.addEventListener("click", (e) => {
     const b = e.target.closest("[data-theme]");
     if (!b) return;

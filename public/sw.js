@@ -2,13 +2,14 @@
    Offline-fähig: App-Dateien "network-first" (Deploys kommen sofort an, Cloudflare antwortet mit günstigen 304),
    ohne Netz aus dem Cache. Icons "cache-first". VERSION bei Änderungen an SHELL erhöhen. */
 
-const VERSION = "wizard-v1";
+const VERSION = "wizard-v2";
 const SHELL = [
   "/",
   "/styles.css",
   "/rules.js",
   "/app.js",
   "/manifest.webmanifest",
+  "/icons/icon.svg",
   "/icons/icon-32.png",
   "/icons/icon-180.png",
   "/icons/icon-192.png",
