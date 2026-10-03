@@ -12,6 +12,10 @@
   Cache-Control: public, max-age=0, must-revalidate
 /*.js
   Cache-Control: public, max-age=0, must-revalidate
+/manifest.webmanifest
+  Cache-Control: public, max-age=0, must-revalidate
+/sw.js
+  Cache-Control: no-cache
 
-/favicon.png
+/icons/*
   Cache-Control: public, max-age=2592000

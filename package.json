@@ -1,12 +1,12 @@
 {
   "name": "wizard",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "description": "Wizard – Score Tracker für das Stichspiel, gehostet auf Cloudflare Workers",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "check": "node --check public/app.js"
+    "check": "node --check public/app.js && node --check public/rules.js && node --check public/sw.js && node test/rules.test.mjs"
   },
   "devDependencies": {
     "wrangler": "^4.137.0"
