@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5a49e0"/>
+      <stop offset="1" stop-color="#2d2290"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <g id="art">
+  <!-- vier Farbkarten, aufgefächert -->
+  <g transform="translate(256 410)" stroke="#2d2290" stroke-width="6" stroke-linejoin="round">
+    <rect x="-70" y="-270" width="140" height="200" rx="22" fill="#7cc46a" transform="rotate(-40)"/>
+    <rect x="-70" y="-270" width="140" height="200" rx="22" fill="#f2cc5c" transform="rotate(40)"/>
+    <rect x="-70" y="-270" width="140" height="200" rx="22" fill="#6cc0e0" transform="rotate(-20)"/>
+    <rect x="-70" y="-270" width="140" height="200" rx="22" fill="#ef8066" transform="rotate(20)"/>
+    <!-- Zauberer-Karte vorne -->
+    <rect x="-78" y="-292" width="156" height="222" rx="24" fill="#fffdf9"/>
+  </g>
+  <!-- Stern -->
+  <path d="M256 160 C264 204 276 216 320 224 C276 232 264 244 256 288 C248 244 236 232 192 224 C236 216 248 204 256 160 Z" fill="#4636c9"/>
+  <circle cx="300" cy="174" r="9" fill="#f2cc5c"/>
+  <circle cx="208" cy="276" r="7" fill="#ef8066"/>
+  </g>
+</svg>

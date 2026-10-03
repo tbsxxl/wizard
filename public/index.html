@@ -22,6 +22,7 @@
   <meta property="og:description" content="Ansagen und Stiche antippen, fertig: Punkte, Geber und Rangliste für das Kartenspiel Wizard." />
   <meta property="og:image" content="/icons/icon-512.png" />
 
+  <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
   <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180.png" />
   <link rel="manifest" href="/manifest.webmanifest" />
@@ -47,7 +48,7 @@
 
   <header class="topbar">
     <div class="brand">
-      <img src="/icons/icon-180.png" alt="" width="40" height="40" class="brand__logo" />
+      <img src="/icons/icon.svg" alt="" width="40" height="40" class="brand__logo" />
       <div class="brand__text">
         <h1>Wizard</h1>
         <p id="subline" class="brand__sub">Punktezähler</p>
@@ -71,10 +72,10 @@
     <section id="setupView" class="view" hidden>
       <div class="card">
         <div class="card__head">
-          <h2>Spieler</h2>
-          <span id="playerCount" class="muted"></span>
+          <h2>Spieler <span id="playerCount" class="muted"></span></h2>
+          <button id="randomDealer" class="chipBtn" type="button" hidden>Geber auslosen</button>
         </div>
-        <p class="hint">In Sitzreihenfolge eintragen. Tippe auf <b>Geber</b>, wer zuerst gibt.</p>
+        <p class="hint">In Sitzreihenfolge eintragen. Namen antippen zum Ändern, <b>Geber</b> gibt in Runde 1.</p>
         <ol id="setupPlayers" class="setupPlayers"></ol>
         <form id="addForm" class="addRow" autocomplete="off">
           <input id="addName" type="text" placeholder="Name" maxlength="20" list="nameSuggestions" enterkeyhint="done" aria-label="Spielername" />
@@ -217,6 +218,16 @@
         <button class="menuItem" id="exportBtn" type="button">Export <span class="muted">Spielstand als JSON</span></button>
         <button class="menuItem" id="importBtn" type="button">Import <span class="muted">JSON einfügen</span></button>
       </div>
+    </div>
+  </dialog>
+
+  <!-- Bestätigung -->
+  <dialog id="confirmDialog" class="sheet sheet--small" aria-labelledby="confirmTitle">
+    <h2 id="confirmTitle">Sicher?</h2>
+    <p id="confirmText" class="hint"></p>
+    <div class="sheet__actions">
+      <button id="confirmNo" class="btn" type="button">Abbrechen</button>
+      <button id="confirmYes" class="btn btn--primary" type="button">OK</button>
     </div>
   </dialog>
 
