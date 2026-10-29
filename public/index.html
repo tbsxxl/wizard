@@ -6,6 +6,7 @@
   <title>Wizard – Punktezähler</title>
   <meta name="description" content="Offline-fähiger Punktezähler für das Kartenspiel Wizard: Ansagen und Stiche antippen, Punkte, Geber und Rangliste werden automatisch geführt." />
   <meta name="theme-color" content="#f7f4ee" />
+  <meta name="color-scheme" content="light dark" />
   <script>
     // Theme vor dem ersten Rendern setzen (kein Aufblitzen). Standard: wie System.
     try {
@@ -40,7 +41,6 @@
     <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></symbol>
     <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18" /></symbol>
     <symbol id="i-up" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6" /></symbol>
-    <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" /></symbol>
     <symbol id="i-deal" viewBox="0 0 24 24"><rect x="8" y="3" width="11" height="15" rx="2" /><path d="M5 7.5v11a2 2 0 0 0 2 2h8" /></symbol>
     <symbol id="i-crown" viewBox="0 0 24 24"><path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5z" /></symbol>
     <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14" /></symbol>
@@ -78,7 +78,7 @@
         <p class="hint">In Sitzreihenfolge eintragen. Namen antippen zum Ändern, <b>Geber</b> gibt in Runde 1.</p>
         <ol id="setupPlayers" class="setupPlayers"></ol>
         <form id="addForm" class="addRow" autocomplete="off">
-          <input id="addName" type="text" placeholder="Name" maxlength="20" list="nameSuggestions" enterkeyhint="done" aria-label="Spielername" />
+          <input id="addName" type="text" placeholder="Name" maxlength="20" list="nameSuggestions" enterkeyhint="done" autocapitalize="words" autocorrect="off" spellcheck="false" aria-label="Spielername" />
           <datalist id="nameSuggestions"></datalist>
           <button class="btn btn--primary btn--icon" type="submit" aria-label="Hinzufügen"><svg class="ico"><use href="#i-plus" /></svg></button>
         </form>
@@ -138,16 +138,16 @@
           <div id="roundTitle" class="roundCard__title">Runde 1</div>
           <div id="dealerLine" class="roundCard__meta"></div>
           <div id="progress" class="progress" aria-hidden="true"><span></span></div>
-          <div id="sumLine" class="sumLine"></div>
+          <div id="sumLine" class="sumLine" aria-live="polite"></div>
         </div>
       </div>
 
       <div class="segmented segmented--phase" role="tablist" aria-label="Eingabe">
-        <button type="button" role="tab" id="phaseBids" data-phase="bids">1 · Ansagen</button>
-        <button type="button" role="tab" id="phaseTricks" data-phase="tricks">2 · Stiche</button>
+        <button type="button" role="tab" id="phaseBids" data-phase="bids" aria-controls="playerList">1 · Ansagen</button>
+        <button type="button" role="tab" id="phaseTricks" data-phase="tricks" aria-controls="playerList">2 · Stiche</button>
       </div>
 
-      <div id="playerList" class="playerList"></div>
+      <div id="playerList" class="playerList" role="tabpanel"></div>
     </section>
 
     <!-- Spielende -->
