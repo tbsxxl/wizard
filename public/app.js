@@ -397,7 +397,7 @@
       el.confirmNo.onclick = () => done(false);
       d.onclose = () => done(false);
       openDialog(d);
-      el.confirmYes.focus();
+      (danger ? el.confirmNo : el.confirmYes).focus();  // destruktive Aktion nie als Vorauswahl
     });
   }
 
@@ -431,15 +431,17 @@
       name.value = p.name;
       name.maxLength = 20;
       name.enterKeyHint = "done";
+      name.autocapitalize = "words";
+      name.spellcheck = false;
+      name.setAttribute("autocorrect", "off");
       name.setAttribute("aria-label", `Name von Spieler ${i + 1}`);
       name.addEventListener("change", () => renamePlayer(p.id, name.value));
       name.addEventListener("keydown", (e) => { if (e.key === "Enter") name.blur(); });
       li.append(
         h("span", "seat", String(i + 1)),
         name,
-        btn(isDealer ? "chipBtn chipBtn--on" : "chipBtn", "Geber", () => commit(() => { state.dealerStart = i; }, false), { "aria-pressed": String(isDealer), title: "Gibt in Runde 1" }),
-        iconBtn("i-up", "Nach oben", () => movePlayer(p.id, -1), i === 0),
-        iconBtn("i-down", "Nach unten", () => movePlayer(p.id, 1), i === n() - 1),
+        dealerBtn(i, isDealer, p.name),
+        iconBtn("i-up", `${p.name} einen Platz nach vorn`, () => movePlayer(p.id, -1), i === 0),
         iconBtn("i-close", `${p.name} entfernen`, () => removePlayer(p.id)),
       );
       return li;
@@ -777,6 +779,10 @@
   el.toastUndo.addEventListener("click", undo);
   el.tableBtn.addEventListener("click", () => { renderTable(); openDialog(el.tableDialog); });
   el.showTableBtn.addEventListener("click", () => { renderTable(); openDialog(el.tableDialog); });
+  // Nur anbieten, was das Gerät kann (iPhone/Safari hat keine Vibration-API)
+  el.hapticToggle.closest(".settingRow").hidden = typeof navigator.vibrate !== "function";
+  el.wakeToggle.closest(".settingRow").hidden = !("wakeLock" in navigator);
+
   el.menuBtn.addEventListener("click", () => {
     el.wakeToggle.checked = prefs.wake;
     el.hapticToggle.checked = prefs.haptics;
@@ -871,6 +877,12 @@
     u.setAttribute("href", `#${id}`);
     s.append(u);
     return s;
+  }
+  function dealerBtn(i, on, name) {
+    const b = btn(on ? "chipBtn chipBtn--on dealerBtn" : "chipBtn dealerBtn", null, () => commit(() => { state.dealerStart = i; }, false),
+      { "aria-pressed": String(on), "aria-label": `${name} gibt in Runde 1`, title: "Gibt in Runde 1" });
+    b.append(svgIcon("i-deal"), h("span", "dealerBtn__text", "Geber"));
+    return b;
   }
   function iconBtn(icon, label, onClick, disabled = false) {
     const b = btn("iconBtn iconBtn--flat iconBtn--small", null, onClick, { "aria-label": label, title: label });
